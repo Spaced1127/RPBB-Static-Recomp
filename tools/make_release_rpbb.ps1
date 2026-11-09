@@ -1,6 +1,6 @@
 param(
     [string]$Version = "0.1.0",
-    [string]$Runner = "H:\Projects\SB-RFD\build\moderngekko\moderngekko-run.exe",
+    [string]$Runner = "H:\Projects\RPBB-GCN-Recomp\vendor\rpbb.exe",
     [string]$Sys = "H:\Projects\SB-RFD\dist\SpongeBobRecomp-Release-v0.1.2\Sys",
     [string]$Licenses = "H:\Projects\SB-RFD\dist\SpongeBobRecomp-Release-v0.1.2\LICENSES"
 )
@@ -14,6 +14,9 @@ $zip = Join-Path $root "dist\$stageName.zip"
 foreach ($p in @($Runner, $Sys, $Licenses, (Join-Path $root "recomplauncher.json"),
                  (Join-Path $root "README.md"), (Join-Path $root "PLAYERS.md"),
                  (Join-Path $root "run.bat"), (Join-Path $root "tools\rpbb_launcher.cs"),
+                 (Join-Path $root "tools\set_icon.cs"),
+                 (Join-Path $root "assets\rpbb.ico"),
+                 (Join-Path $root "assets\rpbb-launcher.ico"),
                  (Join-Path $root "defaults\GCPadNew.ini"))) {
     if (-not (Test-Path $p)) { throw "Missing release input: $p" }
 }
@@ -26,10 +29,16 @@ New-Item -ItemType Directory -Force -Path (Join-Path $stage "game") | Out-Null
 # The setup/start helper is compiled from source so it always matches this tree.
 $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 if (-not (Test-Path $csc)) { throw "csc.exe not found at $csc" }
-& $csc /nologo /optimize+ /target:exe /out:"$stage\rpbb_launch.exe" (Join-Path $root "tools\rpbb_launcher.cs")
-if ($LASTEXITCODE -ne 0) { throw "rpbb_launch.exe build failed" }
+& $csc /nologo /optimize+ /target:exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /win32icon:"$root\assets\rpbb-launcher.ico" /out:"$stage\rpbb-launcher.exe" (Join-Path $root "tools\rpbb_launcher.cs")
+if ($LASTEXITCODE -ne 0) { throw "rpbb-launcher.exe build failed" }
 
-Copy-Item -LiteralPath $Runner -Destination (Join-Path $stage "moderngekko-run.exe") -Force
+Copy-Item -LiteralPath $Runner -Destination (Join-Path $stage "rpbb.exe") -Force
+
+$setIcon = Join-Path $root "work\set_icon.exe"
+& $csc /nologo /target:exe /out:"$setIcon" (Join-Path $root "tools\set_icon.cs")
+if ($LASTEXITCODE -ne 0) { throw "set_icon.exe build failed" }
+& $setIcon (Join-Path $stage "rpbb.exe") (Join-Path $root "assets\rpbb.ico")
+if ($LASTEXITCODE -ne 0) { throw "rpbb.exe icon update failed" }
 Copy-Item -LiteralPath $Sys -Destination (Join-Path $stage "Sys") -Recurse -Force
 Copy-Item -LiteralPath $Licenses -Destination (Join-Path $stage "LICENSES") -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $root "recomplauncher.json") -Destination $stage -Force

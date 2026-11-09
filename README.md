@@ -18,9 +18,9 @@ press Play. The included `recomplauncher.json` provides:
 - **Easy setup** — pick the USA ISO (or extracted folder); the setup helper verifies the
   disc's `GBQE78` ID and DOL hash, and the launcher checks the ISO against the verified
   Redump USA dump.
-- **Settings** — internal resolution, graphics API (Vulkan / D3D12 / OpenGL) and the
-  FPS title display.
-- **Full setup** — the ISO is extracted to a local game folder by `rpbb_launch.exe`,
+- **Settings** — internal resolution from 1x (640×528) to 12x (7680×4320), graphics
+  API (Vulkan / D3D12 / OpenGL), window mode and the FPS title display.
+- **Full setup** — the ISO is extracted to a local game folder by `rpbb-launcher.exe`,
   with progress shown in the launcher; the verified dump gets the RecompLauncher badge.
 
 ## Requirements
@@ -45,18 +45,17 @@ The first setup extracts an ISO automatically. Press Play.
 ### Standalone
 
 1. Extract the release zip.
-2. Either:
-   - put your extracted game folder in `game/` (it must contain `sys/main.dol` and
-     `files/`), then run `run.bat`; or
-   - run `run.bat "D:\path\to\Rocket Power Beach Bandits.iso"`. The first run extracts
-     the ISO to `%LOCALAPPDATA%\RocketPowerRecomp\game`.
-3. The game starts in JIT mode at 60 FPS.
+2. Run `rpbb-launcher.exe` and pick your USA ISO or extracted game folder (a folder in
+   `game/` and a RecompLauncher extraction are detected automatically).
+3. Set resolution, graphics API and window mode, then press **Play**. The first ISO run
+   extracts the disc to `%LOCALAPPDATA%\RocketPowerRecomp\game`.
+4. `rpbb.exe` is the game runtime; the launcher starts it in JIT mode at 60 FPS.
 
-`rpbb_launch.exe` is the setup/start helper. It can be used directly:
+`run.bat` and `rpbb-launcher.exe` also work from the command line:
 
 ```
-rpbb_launch.exe --prepare --game "D:\dump.iso" --user-dir "%LOCALAPPDATA%\RocketPowerRecomp"
-rpbb_launch.exe --game "D:\dump.iso" --user-dir "%LOCALAPPDATA%\RocketPowerRecomp"
+rpbb-launcher.exe --prepare --game "D:\dump.iso" --user-dir "%LOCALAPPDATA%\RocketPowerRecomp"
+rpbb-launcher.exe --game "D:\dump.iso" --user-dir "%LOCALAPPDATA%\RocketPowerRecomp"
 ```
 
 For an extracted folder, point `--game` at the folder.
@@ -68,10 +67,18 @@ They are stored under `%LOCALAPPDATA%\RocketPowerRecomp`:
 
 | Setting | File | Key |
 |---|---|---|
-| Internal resolution | `Config/GFX.ini` | `Settings/InternalResolution` (1, 2 or 3) |
+| Internal resolution | `config.ini` | `Video/resolution` (`640x528` to `7680x4320`) |
 | Graphics API | command line | `--graphics vulkan|d3d12|opengl` |
 | Window mode | command line | `--window-mode borderless|fullscreen|windowed` |
+| Aspect ratio | `config.ini` | `Video/aspect` (`auto`, `wide`, `standard`, `stretch`) |
+| Widescreen hack | `config.ini` | `Video/widescreen_hack` (`true` / `false`) |
 | Show FPS | `config.ini` | `Video/show_fps_in_title` |
+| Audio output | `config.ini` | `Video/mute`, `Video/volume` |
+
+The launcher offers the same resolution presets as the SpongeBob recomp: 1x
+(640×528), 2x (1280×720), 3x (1920×1080), 4x (2560×1440), 6x (3840×2160), 8x
+(5120×2880) and 12x (7680×4320). The label is the internal render resolution, not the
+window size.
 
 Window modes:
 
@@ -80,17 +87,29 @@ Window modes:
   and restores the desktop mode when the game exits.
 - **Windowed** — the runner’s normal window.
 
-Defaults: Vulkan, 3x internal resolution (1920×1584, suitable for 1080p), 60 FPS speed
-limit, DSP LLE, Cubeb audio. The game is natively 4:3; the fullscreen modes preserve
-that aspect and pillarbox on a 16:9 display.
+Defaults: Vulkan, 3x internal resolution (1920×1584, suitable for 1080p), auto framing,
+60 FPS speed limit, DSP LLE, Cubeb audio.
+
+### Widescreen
+
+The launcher and RecompLauncher expose the same framing options as the SpongeBob recomp:
+
+- **Aspect ratio** — **Auto (game native)** keeps the game's 4:3 framing;
+  **16:9 widescreen** fills a widescreen display; **4:3 standard** forces 4:3;
+  **Stretch** stretches the 4:3 image to the window.
+- **Widescreen hack (stretch 3D)** — widens the 3D projection to match 16:9. Enable it
+  together with **16:9 widescreen** for a full-width 3D picture.
+
+The 3D scene fills 16:9 correctly; the 2D HUD may stretch horizontally. Menus and other
+2D screens may still render with their original 4:3 framing.
 
 ## Audio
 
 The game uses a custom DSP microcode. DSP HLE produces silence, so the release uses
 **DSP LLE**. The required DSP ROM/coefficient files are in `Sys/GC`.
 
-If the game is silent, check the Windows volume mixer: `moderngekko-run` must not be
-muted. Audio is in sync at 60 FPS.
+If the game is silent, check the Windows volume mixer: `rpbb` must not be muted.
+Audio is in sync at 60 FPS.
 
 ## Saves
 

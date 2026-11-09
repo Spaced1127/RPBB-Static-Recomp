@@ -18,13 +18,13 @@
     ]
   },
   "prepare": {
-    "program": ["rpbb_launch.exe"],
+    "program": ["rpbb-launcher.exe"],
     "args": ["--prepare", "--game", "{game}", "--install", "{install}", "--user-dir", "{local}/RocketPowerRecomp"],
     "label": "Extracting your disc image",
     "timeout": 600
   },
   "start": {
-    "program": ["rpbb_launch.exe"],
+    "program": ["rpbb-launcher.exe"],
     "args": ["--game", "{game}", "--install", "{install}", "--user-dir", "{local}/RocketPowerRecomp", "--window-mode", "borderless"],
     "env": {
       "MODERNGEKKO_STATICRECOMP": "0"
@@ -83,9 +83,15 @@
         "Video/backend": "Vulkan",
         "Video/fullscreen": "false",
         "Video/show_fps_in_title": "true",
+        "Video/aspect": "auto",
+        "Video/widescreen_hack": "false",
         "Video/mute": "false",
         "Video/volume": "100",
         "Video/efb_access": "true"
+      },
+      "ensure": {
+        "Video/aspect": "auto",
+        "Video/widescreen_hack": "false"
       },
       "always": {
         "Video/efb_access": "true"
@@ -96,15 +102,19 @@
     {
       "id": "resolution",
       "label": "Resolution",
-      "in": "gfx",
-      "help": "Higher is sharper. 3x matches a 1080p screen; lower it if the game drops below 60 FPS.",
+      "in": "frontend",
+      "help": "The internal render resolution, not the window size. 3x is 1920x1080. Lower it if the game drops below 60 FPS.",
       "choices": [
-        { "label": "Native (1x)", "set": { "Settings/InternalResolution": "1" } },
-        { "label": "2x", "set": { "Settings/InternalResolution": "2" } },
-        { "label": "3x (1080p)", "set": { "Settings/InternalResolution": "3" } }
+        { "label": "1x (640x528)", "set": { "Video/resolution": "640x528" } },
+        { "label": "2x (1280x720)", "set": { "Video/resolution": "1280x720" } },
+        { "label": "3x (1920x1080)", "set": { "Video/resolution": "1920x1080" } },
+        { "label": "4x (2560x1440)", "set": { "Video/resolution": "2560x1440" } },
+        { "label": "6x (3840x2160)", "set": { "Video/resolution": "3840x2160" } },
+        { "label": "8x (5120x2880)", "set": { "Video/resolution": "5120x2880" } },
+        { "label": "12x (7680x4320)", "set": { "Video/resolution": "7680x4320" } }
       ],
       "defaults": {
-        "Settings/InternalResolution": "3"
+        "Video/resolution": "1920x1080"
       }
     },
     {
@@ -117,6 +127,34 @@
         { "label": "D3D12", "args": ["--graphics", "d3d12"] },
         { "label": "OpenGL", "args": ["--graphics", "opengl"] }
       ]
+    },
+    {
+      "id": "aspect",
+      "label": "Aspect ratio",
+      "in": "frontend",
+      "help": "Auto keeps the game's own 4:3 framing. 16:9 fills a widescreen display; enable Widescreen hack for a full-width 3D view.",
+      "choices": [
+        { "label": "Auto (game native)", "set": { "Video/aspect": "auto" } },
+        { "label": "16:9 widescreen", "set": { "Video/aspect": "wide" } },
+        { "label": "4:3 standard", "set": { "Video/aspect": "standard" } },
+        { "label": "Stretch", "set": { "Video/aspect": "stretch" } }
+      ],
+      "defaults": {
+        "Video/aspect": "auto"
+      }
+    },
+    {
+      "id": "wide_hack",
+      "label": "Widescreen hack",
+      "in": "frontend",
+      "help": "Widens the 3D projection to match the chosen aspect. The 2D HUD may stretch.",
+      "choices": [
+        { "label": "Off", "set": { "Video/widescreen_hack": "false" } },
+        { "label": "On", "set": { "Video/widescreen_hack": "true" } }
+      ],
+      "defaults": {
+        "Video/widescreen_hack": "false"
+      }
     },
     {
       "id": "window",

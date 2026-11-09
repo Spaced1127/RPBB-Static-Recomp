@@ -46,9 +46,13 @@ RecompLauncher shows the settings on the game's page and in Big Picture mode. Th
 live in `%LOCALAPPDATA%\RocketPowerRecomp`:
 
 - `Config/Dolphin.ini` — DSP LLE, Cubeb audio, 60 FPS speed limit.
-- `Config/GFX.ini` — internal resolution.
+- `config.ini` — internal resolution, aspect ratio, widescreen hack, window title FPS
+  display, volume and 2D-screen compatibility.
 - `Config/GCPadNew.ini` — controller mapping.
-- `config.ini` — window title FPS display and 2D-screen compatibility.
+
+The internal resolution presets match the SpongeBob recomp: 1x (640×528), 2x
+(1280×720), 3x (1920×1080), 4x (2560×1440), 6x (3840×2160), 8x (5120×2880) and 12x
+(7680×4320). Higher settings are sharper but cost more GPU time.
 
 Window mode is a launch option (and a RecompLauncher setting):
 
@@ -57,11 +61,24 @@ Window mode is a launch option (and a RecompLauncher setting):
   restored on exit.
 - **Windowed** — the normal window.
 
-The game is natively 4:3, so fullscreen modes preserve the aspect and pillarbox on a
-16:9 display.
+## Widescreen
+
+The game is natively 4:3. For a full-width 16:9 picture:
+
+1. Set **Aspect ratio** to **16:9 widescreen**.
+2. Turn on **Widescreen hack (stretch 3D)**.
+
+The 3D scene fills the screen; the 2D HUD may stretch. Auto keeps the original 4:3
+framing, and 4:3 standard forces it back if a setting looks wrong.
+
+## Launcher
+
+Run `rpbb-launcher.exe` to pick your game copy and change the video, audio and controller
+options. The same options are available in RecompLauncher. `rpbb.exe` is the game
+runtime.
 
 ## RecompLauncher
 
 This release supports [RecompLauncher](https://recomplauncher.com). Pick your own USA
-ISO or extracted folder, set resolution and graphics, and press Play. The first setup
-extracts an ISO automatically and checks it against the verified USA dump.
+ISO or extracted folder, set resolution, graphics and window mode, and press Play. The
+first setup extracts an ISO automatically and checks it against the verified USA dump.

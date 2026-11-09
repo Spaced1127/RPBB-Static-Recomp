@@ -12,11 +12,11 @@ if not exist "%GAME%" (
 )
 if /i "%GAME:~-4%"==".iso" (
   if not exist "%LOCALAPPDATA%\RocketPowerRecomp\game\sys\main.dol" (
-    "%~dp0rpbb_launch.exe" --prepare --game "%GAME%" --user-dir "%LOCALAPPDATA%\RocketPowerRecomp"
+    "%~dp0rpbb-launcher.exe" --prepare --game "%GAME%" --user-dir "%LOCALAPPDATA%\RocketPowerRecomp"
     if errorlevel 1 (
       pause
       exit /b 1
     )
   )
 )
-"%~dp0rpbb_launch.exe" --game "%GAME%" --user-dir "%LOCALAPPDATA%\RocketPowerRecomp"
+"%~dp0rpbb-launcher.exe" --game "%GAME%" --user-dir "%LOCALAPPDATA%\RocketPowerRecomp"

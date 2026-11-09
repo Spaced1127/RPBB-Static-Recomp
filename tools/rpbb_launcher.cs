@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using System.Windows.Forms;
 
 internal static class Program
 {
@@ -33,8 +36,12 @@ internal static class Program
         public long Size;
     }
 
+    [STAThread]
     private static int Main(string[] args)
     {
+        if (args.Length == 0)
+            return RunLauncher();
+
         try
         {
             Options o = Parse(args);
@@ -76,6 +83,8 @@ internal static class Program
                 o.UserDir = Next(args, ref i);
             else if (a == "--window-mode")
                 o.WindowMode = Next(args, ref i).ToLowerInvariant();
+            else if (!a.StartsWith("-") && string.IsNullOrEmpty(o.Game))
+                o.Game = a; // dragging an ISO/folder onto the launcher
             else
                 o.Pass.Add(a);
         }
@@ -156,6 +165,15 @@ internal static class Program
                 // A previous extraction that can't be removed is replaced file by file below.
             }
             Extract(fs, head, dest);
+        }
+
+        try
+        {
+            File.WriteAllText(Path.Combine(dest, "source.txt"), SourceStamp(o.Game));
+        }
+        catch
+        {
+            // The marker only skips re-extraction; a failed write just means it runs again.
         }
 
         Progress(1.0, "Game files ready");
@@ -322,10 +340,10 @@ internal static class Program
         }
 
         string appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
-        string runner = Path.Combine(appDir, "moderngekko-run.exe");
+        string runner = Path.Combine(appDir, "rpbb.exe");
         if (!File.Exists(runner))
         {
-            Error("moderngekko-run.exe is missing from the install folder.");
+            Error("rpbb.exe is missing from the install folder.");
             return 2;
         }
 
@@ -499,10 +517,14 @@ internal static class Program
                 "show_fps_in_title=true" + Environment.NewLine +
                 "mute=false" + Environment.NewLine +
                 "volume=100" + Environment.NewLine +
+                "aspect=auto" + Environment.NewLine +
+                "widescreen_hack=false" + Environment.NewLine +
                 "efb_access=true" + Environment.NewLine);
         }
         else
         {
+            EnsureIniKey(frontend, "Video", "aspect", "auto");
+            EnsureIniKey(frontend, "Video", "widescreen_hack", "false");
             EnsureIniKey(frontend, "Video", "efb_access", "true");
         }
 
@@ -625,18 +647,1468 @@ internal static class Program
         }
     }
 
+    private static Action<double, string> ProgressSink;
+
     private static void Progress(double fraction, string text)
     {
         if (fraction < 0) fraction = 0;
         if (fraction > 1) fraction = 1;
         Console.WriteLine("progress " + fraction.ToString("0.###", CultureInfo.InvariantCulture) + " " + text);
         Console.Out.Flush();
+        Action<double, string> sink = ProgressSink;
+        if (sink != null)
+        {
+            try { sink(fraction, text); }
+            catch { }
+        }
     }
+
+    private static string LastError;
 
     private static void Error(string message)
     {
+        LastError = message;
         Console.Error.WriteLine(message);
         Console.Error.Flush();
+    }
+
+    private static int RunLauncher()
+    {
+        try { HideConsole(); }
+        catch { }
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += delegate(object sender, ThreadExceptionEventArgs e)
+        {
+            ReportLauncherError(e.Exception);
+        };
+        AppDomain.CurrentDomain.UnhandledException += delegate(object sender, UnhandledExceptionEventArgs e)
+        {
+            ReportLauncherError(e.ExceptionObject as Exception);
+        };
+        Application.Run(new LauncherForm());
+        return 0;
+    }
+
+    private static void ReportLauncherError(Exception ex)
+    {
+        try
+        {
+            string dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                DefaultUserFolder);
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "launcher-crash.txt"),
+                ex == null ? "Unknown launcher error." : ex.ToString());
+        }
+        catch { }
+
+        try
+        {
+            MessageBox.Show(ex == null ? "The launcher hit an unknown error." : ex.ToString(),
+                "Rocket Power: Beach Bandits - Launcher", MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        catch { }
+    }
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GetConsoleWindow();
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    private static void HideConsole()
+    {
+        IntPtr hwnd = GetConsoleWindow();
+        if (hwnd != IntPtr.Zero)
+            ShowWindow(hwnd, 0);
+    }
+
+    private static string GetIniKey(string path, string section, string key, string fallback)
+    {
+        if (!File.Exists(path))
+            return fallback;
+        bool inSection = false;
+        foreach (string line in File.ReadAllLines(path))
+        {
+            string t = line.Trim();
+            if (t.StartsWith("[") && t.EndsWith("]"))
+            {
+                inSection = t.Substring(1, t.Length - 2).Trim().Equals(section,
+                    StringComparison.OrdinalIgnoreCase);
+                continue;
+            }
+            if (!inSection)
+                continue;
+            int eq = t.IndexOf('=');
+            if (eq <= 0)
+                continue;
+            if (t.Substring(0, eq).Trim().Equals(key, StringComparison.OrdinalIgnoreCase))
+                return t.Substring(eq + 1).Trim();
+        }
+        return fallback;
+    }
+
+    private static void SetIniKey(string path, string section, string key, string value)
+    {
+        List<string> lines = File.Exists(path)
+            ? new List<string>(File.ReadAllLines(path))
+            : new List<string>();
+        int sectionStart = -1;
+        for (int i = 0; i < lines.Count; i++)
+        {
+            string t = lines[i].Trim();
+            if (t.StartsWith("[") && t.EndsWith("]") &&
+                t.Substring(1, t.Length - 2).Trim().Equals(section, StringComparison.OrdinalIgnoreCase))
+            {
+                sectionStart = i + 1;
+                break;
+            }
+        }
+
+        if (sectionStart < 0)
+        {
+            if (lines.Count > 0 && lines[lines.Count - 1].Trim().Length != 0)
+                lines.Add(string.Empty);
+            lines.Add("[" + section + "]");
+            lines.Add(key + " = " + value);
+            File.WriteAllLines(path, lines.ToArray());
+            return;
+        }
+
+        int sectionEnd = lines.Count;
+        for (int i = sectionStart; i < lines.Count; i++)
+        {
+            string t = lines[i].Trim();
+            if (t.StartsWith("[") && t.EndsWith("]"))
+            {
+                sectionEnd = i;
+                break;
+            }
+            int eq = t.IndexOf('=');
+            if (eq > 0 && t.Substring(0, eq).Trim().Equals(key, StringComparison.OrdinalIgnoreCase))
+            {
+                lines[i] = key + " = " + value;
+                File.WriteAllLines(path, lines.ToArray());
+                return;
+            }
+        }
+        lines.Insert(sectionEnd, key + " = " + value);
+        File.WriteAllLines(path, lines.ToArray());
+    }
+
+    private static string SourceStamp(string path)
+    {
+        FileInfo info = new FileInfo(path);
+        return info.FullName + "|" + info.Length + "|" + info.LastWriteTimeUtc.Ticks;
+    }
+
+    private static bool NeedsPrepare(Options o)
+    {
+        if (Directory.Exists(o.Game))
+            return true;
+        string dest = Path.Combine(o.UserDir, "game");
+        if (!File.Exists(Path.Combine(dest, "sys", "main.dol")))
+            return true;
+        string marker = Path.Combine(dest, "source.txt");
+        if (!File.Exists(marker))
+            return true;
+        return File.ReadAllText(marker).Trim() != SourceStamp(o.Game);
+    }
+
+    private sealed class Choice
+    {
+        public readonly string Label;
+        public readonly string Value;
+
+        public Choice(string label, string value)
+        {
+            Label = label;
+            Value = value;
+        }
+
+        public override string ToString()
+        {
+            return Label;
+        }
+    }
+
+    private sealed class LauncherForm : Form
+    {
+        private static readonly Color BgTop = Color.FromArgb(4, 14, 21);
+        private static readonly Color BgBottom = Color.FromArgb(9, 48, 58);
+        private static readonly Color SidebarColor = Color.FromArgb(6, 22, 30);
+        private static readonly Color CardColor = Color.FromArgb(7, 27, 36);
+        private static readonly Color FieldColor = Color.FromArgb(18, 44, 56);
+        private static readonly Color CardBorder = Color.FromArgb(32, 64, 74);
+        private static readonly Color Accent = Color.FromArgb(245, 195, 30);
+        private static readonly Color AccentHover = Color.FromArgb(255, 214, 62);
+        private static readonly Color TextMain = Color.FromArgb(232, 241, 245);
+        private static readonly Color TextDim = Color.FromArgb(138, 166, 178);
+        private static readonly Color ReadyGreen = Color.FromArgb(38, 118, 84);
+        private static readonly Color NotReadyRed = Color.FromArgb(128, 48, 58);
+
+        private static readonly string[] ResLabels =
+        {
+            "1x (640x528)", "2x (1280x720)", "3x (1920x1080)", "4x (2560x1440)",
+            "6x (3840x2160)", "8x (5120x2880)", "12x (7680x4320)"
+        };
+
+        private static readonly string[] ResValues =
+        {
+            "640x528", "1280x720", "1920x1080", "2560x1440",
+            "3840x2160", "5120x2880", "7680x4320"
+        };
+
+        private static readonly string[] ResScales =
+        {
+            "1", "2", "3", "4", "6", "8", "12"
+        };
+
+        private readonly string _appDir;
+        private readonly string _userDir;
+        private readonly string _launcherIni;
+        private TextBox _gameBox;
+        private ComboBox _resolution;
+        private ComboBox _graphics;
+        private ComboBox _window;
+        private ComboBox _audio;
+        private ComboBox _aspect;
+        private CheckBox _fps;
+        private CheckBox _wideHack;
+        private TrackBar _volume;
+        private Label _volumeValue;
+        private AccentButton _play;
+        private Button _prepare;
+        private Button _settings;
+        private Label _status;
+        private Label _statusDetail;
+        private Label _gameStatus;
+        private Label _launchSummary;
+        private Label _sideStatus;
+        private Label _controllerStatus;
+        private PillLabel _badge;
+        private AccentProgress _progress;
+        private TransparentPanel[] _pages;
+        private NavButton[] _navs;
+        private bool _busy;
+        private bool _gameRunning;
+        private bool _loaded;
+
+        private sealed class TransparentPanel : Panel
+        {
+            public TransparentPanel()
+            {
+                SetStyle(ControlStyles.SupportsTransparentBackColor |
+                         ControlStyles.AllPaintingInWmPaint |
+                         ControlStyles.OptimizedDoubleBuffer, true);
+                BackColor = Color.Transparent;
+            }
+        }
+
+        private sealed class CardPanel : Panel
+        {
+            public string Title;
+
+            public CardPanel()
+            {
+                SetStyle(ControlStyles.SupportsTransparentBackColor |
+                         ControlStyles.AllPaintingInWmPaint |
+                         ControlStyles.OptimizedDoubleBuffer, true);
+                BackColor = Color.Transparent;
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                Rectangle bounds = new Rectangle(0, 0, Width - 1, Height - 1);
+                using (GraphicsPath path = Rounded(bounds, 10))
+                {
+                    using (SolidBrush fill = new SolidBrush(Color.FromArgb(232, CardColor)))
+                        e.Graphics.FillPath(fill, path);
+                    using (Pen border = new Pen(Color.FromArgb(70, CardBorder), 1))
+                        e.Graphics.DrawPath(border, path);
+                }
+
+                if (!string.IsNullOrEmpty(Title))
+                {
+                    using (Font titleFont = new Font("Segoe UI", 8.5F, FontStyle.Bold))
+                    using (SolidBrush titleBrush = new SolidBrush(Accent))
+                        e.Graphics.DrawString(Title, titleFont, titleBrush, 18, 13);
+                    using (Pen rule = new Pen(Color.FromArgb(90, Accent), 1))
+                        e.Graphics.DrawLine(rule, 18, 35, Width - 18, 35);
+                }
+                base.OnPaint(e);
+            }
+        }
+
+        private sealed class NavButton : Button
+        {
+            private bool _active;
+
+            public bool Active
+            {
+                get { return _active; }
+                set { _active = value; Invalidate(); }
+            }
+
+            public NavButton()
+            {
+                SetStyle(ControlStyles.UserPaint |
+                         ControlStyles.AllPaintingInWmPaint |
+                         ControlStyles.OptimizedDoubleBuffer, true);
+                FlatStyle = FlatStyle.Flat;
+                FlatAppearance.BorderSize = 0;
+                TextAlign = ContentAlignment.MiddleLeft;
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+                Cursor = Cursors.Hand;
+                ForeColor = TextMain;
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                e.Graphics.Clear(SidebarColor);
+                if (_active)
+                {
+                    using (SolidBrush fill = new SolidBrush(Color.FromArgb(20, 56, 68)))
+                        e.Graphics.FillRectangle(fill, 0, 4, Width, Height - 8);
+                    using (SolidBrush bar = new SolidBrush(Accent))
+                        e.Graphics.FillRectangle(bar, 0, 4, 4, Height - 8);
+                }
+
+                TextRenderer.DrawText(e.Graphics, Text, Font,
+                    new Rectangle(22, 0, Width - 22, Height),
+                    _active ? Accent : Color.FromArgb(184, 208, 218),
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
+                    TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
+            }
+        }
+
+        private sealed class AccentButton : Button
+        {
+            private bool _hover;
+
+            public AccentButton()
+            {
+                SetStyle(ControlStyles.UserPaint |
+                         ControlStyles.AllPaintingInWmPaint |
+                         ControlStyles.OptimizedDoubleBuffer, true);
+                FlatStyle = FlatStyle.Flat;
+                FlatAppearance.BorderSize = 0;
+                BackColor = Color.Transparent;
+                ForeColor = Color.FromArgb(12, 18, 22);
+                Font = new Font("Segoe UI", 18F, FontStyle.Bold);
+                Cursor = Cursors.Hand;
+            }
+
+            protected override void OnMouseEnter(EventArgs e)
+            {
+                _hover = true;
+                Invalidate();
+                base.OnMouseEnter(e);
+            }
+
+            protected override void OnMouseLeave(EventArgs e)
+            {
+                _hover = false;
+                Invalidate();
+                base.OnMouseLeave(e);
+            }
+
+            protected override void OnEnabledChanged(EventArgs e)
+            {
+                Invalidate();
+                base.OnEnabledChanged(e);
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                Rectangle bounds = new Rectangle(0, 0, Width - 1, Height - 1);
+                Color fillColor = !Enabled
+                    ? Color.FromArgb(89, 96, 84)
+                    : (_hover ? AccentHover : Accent);
+                using (GraphicsPath path = Rounded(bounds, 10))
+                using (SolidBrush fill = new SolidBrush(fillColor))
+                    e.Graphics.FillPath(fill, path);
+
+                TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle,
+                    Enabled ? ForeColor : Color.FromArgb(60, 64, 58),
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+                    TextFormatFlags.NoPrefix);
+            }
+        }
+
+        private sealed class PillLabel : Control
+        {
+            public Color FillColor = ReadyGreen;
+
+            public PillLabel()
+            {
+                SetStyle(ControlStyles.UserPaint |
+                         ControlStyles.AllPaintingInWmPaint |
+                         ControlStyles.OptimizedDoubleBuffer |
+                         ControlStyles.SupportsTransparentBackColor, true);
+                BackColor = Color.Transparent;
+                ForeColor = Color.White;
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
+            }
+
+            public void SetState(string text, Color color)
+            {
+                Text = text;
+                FillColor = color;
+                Invalidate();
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                Rectangle bounds = new Rectangle(0, 0, Width - 1, Height - 1);
+                using (GraphicsPath path = Rounded(bounds, Height / 2))
+                using (SolidBrush fill = new SolidBrush(FillColor))
+                    e.Graphics.FillPath(fill, path);
+                TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, ForeColor,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+                    TextFormatFlags.NoPrefix);
+            }
+        }
+
+        private sealed class AccentProgress : Control
+        {
+            private int _value;
+
+            public int Value
+            {
+                get { return _value; }
+                set
+                {
+                    int next = value < 0 ? 0 : (value > 100 ? 100 : value);
+                    if (next == _value)
+                        return;
+                    _value = next;
+                    Invalidate();
+                }
+            }
+
+            public AccentProgress()
+            {
+                SetStyle(ControlStyles.UserPaint |
+                         ControlStyles.AllPaintingInWmPaint |
+                         ControlStyles.OptimizedDoubleBuffer, true);
+                BackColor = CardColor;
+                Height = 10;
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                Rectangle track = new Rectangle(0, 0, Width - 1, Height - 1);
+                using (GraphicsPath path = Rounded(track, Height / 2))
+                using (SolidBrush fill = new SolidBrush(Color.FromArgb(18, 48, 60)))
+                    e.Graphics.FillPath(fill, path);
+
+                int width = (Width - 1) * _value / 100;
+                if (width > 2)
+                {
+                    Rectangle bar = new Rectangle(0, 0, width, Height - 1);
+                    using (GraphicsPath path = Rounded(bar, Height / 2))
+                    using (SolidBrush fill = new SolidBrush(Accent))
+                        e.Graphics.FillPath(fill, path);
+                }
+            }
+        }
+
+        private static GraphicsPath Rounded(Rectangle bounds, int radius)
+        {
+            int diameter = radius * 2;
+            GraphicsPath path = new GraphicsPath();
+            path.AddArc(bounds.X, bounds.Y, diameter, diameter, 180, 90);
+            path.AddArc(bounds.Right - diameter, bounds.Y, diameter, diameter, 270, 90);
+            path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
+            path.AddArc(bounds.X, bounds.Bottom - diameter, diameter, diameter, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
+        public LauncherForm()
+        {
+            _appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
+            _userDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                DefaultUserFolder);
+            _launcherIni = Path.Combine(_userDir, "launcher.ini");
+
+            Text = "Rocket Power: Beach Bandits - Launcher";
+            ClientSize = new Size(1180, 800);
+            MinimumSize = new Size(1196, 839);
+            MaximumSize = new Size(1196, 839);
+            StartPosition = FormStartPosition.CenterScreen;
+            FormBorderStyle = FormBorderStyle.FixedSingle;
+            MaximizeBox = false;
+            BackColor = BgTop;
+            ForeColor = TextMain;
+            Font = new Font("Segoe UI", 9F);
+            AutoScaleMode = AutoScaleMode.Dpi;
+            DoubleBuffered = true;
+            try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
+            catch { }
+            BackgroundImage = CreateBackground(1180, 800);
+            BackgroundImageLayout = ImageLayout.Stretch;
+
+            BuildUi();
+            LoadSettings();
+            _loaded = true;
+        }
+
+        private static Bitmap CreateBackground(int width, int height)
+        {
+            Bitmap bitmap = new Bitmap(width, height);
+            using (Graphics g = Graphics.FromImage(bitmap))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                Rectangle all = new Rectangle(0, 0, width, height);
+                using (LinearGradientBrush sky = new LinearGradientBrush(
+                    all, BgTop, BgBottom, 90F))
+                    g.FillRectangle(sky, all);
+
+                // Warm low sun and its glow.
+                float sunX = width - 250F;
+                float sunY = 210F;
+                for (int i = 22; i >= 1; i--)
+                {
+                    float d = i * 36F;
+                    int alpha = i < 6 ? 5 : 3;
+                    using (SolidBrush glow = new SolidBrush(Color.FromArgb(alpha, 255, 158, 64)))
+                        g.FillEllipse(glow, sunX - d, sunY - d, d * 2, d * 2);
+                }
+                using (GraphicsPath sunPath = new GraphicsPath())
+                {
+                    RectangleF sunRect = new RectangleF(sunX - 62, sunY - 62, 124, 124);
+                    sunPath.AddEllipse(sunRect);
+                    using (PathGradientBrush sun = new PathGradientBrush(sunPath))
+                    {
+                        sun.CenterColor = Color.FromArgb(190, 255, 186, 92);
+                        sun.SurroundColors = new Color[] { Color.FromArgb(0, 255, 150, 50) };
+                        g.FillEllipse(sun, sunRect);
+                    }
+                }
+
+                using (SolidBrush ray = new SolidBrush(Color.FromArgb(7, 124, 226, 232)))
+                {
+                    Point[] first = {
+                        new Point(width - 390, 0), new Point(width - 230, 0),
+                        new Point(width - 760, height), new Point(width - 1010, height)
+                    };
+                    Point[] second = {
+                        new Point(width - 150, 0), new Point(width - 70, 0),
+                        new Point(width - 450, height), new Point(width - 570, height)
+                    };
+                    g.FillPolygon(ray, first);
+                    g.FillPolygon(ray, second);
+                }
+
+                DrawWave(g, width, height, height - 210F, 24F, Color.FromArgb(22, 12, 64, 74));
+                DrawWave(g, width, height, height - 150F, 20F, Color.FromArgb(30, 10, 54, 64));
+                DrawWave(g, width, height, height - 80F, 16F, Color.FromArgb(42, 7, 40, 50));
+
+                Random bubbles = new Random(7);
+                for (int i = 0; i < 65; i++)
+                {
+                    int x = bubbles.Next(width);
+                    int y = bubbles.Next(height - 40);
+                    int d = bubbles.Next(3, 14);
+                    using (Pen ring = new Pen(Color.FromArgb(bubbles.Next(7, 26), 128, 222, 232), 1))
+                        g.DrawEllipse(ring, x, y, d, d);
+                }
+            }
+            return bitmap;
+        }
+
+        private static void DrawWave(Graphics g, int width, int height, float baseY,
+                                     float amplitude, Color color)
+        {
+            using (GraphicsPath path = new GraphicsPath())
+            {
+                PointF previous = new PointF(0, baseY);
+                path.AddLine(new PointF(0, height), previous);
+                for (int x = 0; x <= width; x += 10)
+                {
+                    float y = baseY + (float)Math.Sin((x + baseY) / 130.0) * amplitude;
+                    PointF next = new PointF(Math.Min(width, x + 10), y);
+                    path.AddLine(previous, next);
+                    previous = next;
+                }
+                path.AddLine(previous, new PointF(width, height));
+                path.CloseFigure();
+                using (SolidBrush fill = new SolidBrush(color))
+                    g.FillPath(fill, path);
+            }
+        }
+
+        private void BuildUi()
+        {
+            SuspendLayout();
+
+            Label eyebrow = new Label();
+            eyebrow.Text = "ROCKET POWER";
+            eyebrow.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            eyebrow.ForeColor = Accent;
+            eyebrow.BackColor = Color.Transparent;
+            eyebrow.AutoSize = true;
+            eyebrow.Location = new Point(28, 20);
+            Controls.Add(eyebrow);
+
+            Label title = new Label();
+            title.Text = "Beach Bandits";
+            title.Font = new Font("Segoe UI", 24F, FontStyle.Bold);
+            title.ForeColor = TextMain;
+            title.BackColor = Color.Transparent;
+            title.AutoSize = true;
+            title.Location = new Point(25, 38);
+            Controls.Add(title);
+
+            _badge = new PillLabel();
+            _badge.Location = new Point(942, 26);
+            _badge.Size = new Size(210, 30);
+            _badge.SetState("NO GAME IMPORTED", NotReadyRed);
+            Controls.Add(_badge);
+
+            Label headerSub = new Label();
+            headerSub.Text = "JIT recompilation  \u2022  PC  \u2022  60 FPS";
+            headerSub.ForeColor = TextDim;
+            headerSub.BackColor = Color.Transparent;
+            headerSub.AutoSize = false;
+            headerSub.TextAlign = ContentAlignment.MiddleRight;
+            headerSub.Location = new Point(700, 62);
+            headerSub.Size = new Size(452, 22);
+            Controls.Add(headerSub);
+
+            Panel headerRule = new Panel();
+            headerRule.BackColor = Color.FromArgb(45, 32, 64, 74);
+            headerRule.Location = new Point(0, 108);
+            headerRule.Size = new Size(1180, 1);
+            Controls.Add(headerRule);
+
+            Panel sidebar = new Panel();
+            sidebar.BackColor = SidebarColor;
+            sidebar.Location = new Point(0, 109);
+            sidebar.Size = new Size(190, 691);
+            Controls.Add(sidebar);
+
+            string[] navNames = { "PLAY", "GRAPHICS", "AUDIO", "CONTROLLER" };
+            _navs = new NavButton[navNames.Length];
+            for (int i = 0; i < navNames.Length; i++)
+            {
+                NavButton nav = new NavButton();
+                nav.Text = navNames[i];
+                nav.Location = new Point(0, 26 + i * 52);
+                nav.Size = new Size(190, 44);
+                int index = i;
+                nav.Click += delegate { ShowPage(index); };
+                sidebar.Controls.Add(nav);
+                _navs[i] = nav;
+            }
+
+            Label sideNote = new Label();
+            sideNote.Text = "Your disc, your files.\nNo game data ships with this app.";
+            sideNote.ForeColor = Color.FromArgb(120, 148, 160);
+            sideNote.BackColor = Color.Transparent;
+            sideNote.Font = new Font("Segoe UI", 8.5F);
+            sideNote.AutoSize = false;
+            sideNote.Location = new Point(18, 540);
+            sideNote.Size = new Size(158, 50);
+            sidebar.Controls.Add(sideNote);
+
+            Panel sideRule = new Panel();
+            sideRule.BackColor = Color.FromArgb(35, 32, 64, 74);
+            sideRule.Location = new Point(18, 610);
+            sideRule.Size = new Size(154, 1);
+            sidebar.Controls.Add(sideRule);
+
+            _sideStatus = new Label();
+            _sideStatus.Text = "Import a disc to begin";
+            _sideStatus.ForeColor = TextDim;
+            _sideStatus.BackColor = Color.Transparent;
+            _sideStatus.Font = new Font("Segoe UI", 8.5F);
+            _sideStatus.AutoSize = false;
+            _sideStatus.Location = new Point(18, 626);
+            _sideStatus.Size = new Size(158, 40);
+            sidebar.Controls.Add(_sideStatus);
+
+            _pages = new TransparentPanel[4];
+            for (int i = 0; i < _pages.Length; i++)
+            {
+                TransparentPanel page = new TransparentPanel();
+                page.Location = new Point(210, 122);
+                page.Size = new Size(950, 648);
+                page.Visible = false;
+                Controls.Add(page);
+                _pages[i] = page;
+            }
+
+            BuildPlayPage(_pages[0]);
+            BuildGraphicsPage(_pages[1]);
+            BuildAudioPage(_pages[2]);
+            BuildControllerPage(_pages[3]);
+            ShowPage(0);
+
+            ResumeLayout(false);
+            PerformLayout();
+        }
+
+        private void BuildPlayPage(Control page)
+        {
+            CardPanel gameCard = MakeCard(page, 0, 0, 440, 420, "GAME");
+
+            MakeLabel(gameCard, "Rocket Power: Beach Bandits", 18, 50, 404, 24,
+                      TextMain, 12F, FontStyle.Bold);
+            _gameStatus = MakeLabel(gameCard, "Pick your USA disc image or extracted folder.",
+                                    18, 78, 404, 20, TextDim, 8.5F, FontStyle.Regular);
+
+            MakeLabel(gameCard, "Game copy", 18, 112, 404, 18,
+                      TextMain, 9F, FontStyle.Bold);
+            _gameBox = MakeTextBox(gameCard, 18, 134, 404);
+            _gameBox.TextChanged += delegate
+            {
+                UpdateReadyState();
+                UpdateSummary();
+            };
+
+            Button browseFolder = MakeButton(gameCard, "Browse folder", 18, 172, 196, 30);
+            browseFolder.Click += delegate { BrowseFolder(); };
+            Button browseIso = MakeButton(gameCard, "Browse ISO...", 226, 172, 196, 30);
+            browseIso.Click += delegate { BrowseIso(); };
+
+            MakeLabel(gameCard, "An ISO is extracted and verified on first play.",
+                      18, 212, 404, 20, TextDim, 8.5F, FontStyle.Regular);
+
+            MakeLabel(gameCard, "Disc ID", 18, 252, 110, 18, TextDim, 8.5F, FontStyle.Regular);
+            MakeLabel(gameCard, "GBQE78  \u2022  USA, Redump verified",
+                      140, 252, 280, 18, TextMain, 8.5F, FontStyle.Regular);
+
+            MakeLabel(gameCard, "Save data", 18, 282, 110, 18, TextDim, 8.5F, FontStyle.Regular);
+            MakeLabel(gameCard, @"%LOCALAPPDATA%\RocketPowerRecomp\GC",
+                      140, 282, 280, 18, TextMain, 8.5F, FontStyle.Regular);
+
+            Button openSaves = MakeButton(gameCard, "Open saves", 18, 314, 196, 30);
+            openSaves.Click += delegate { OpenSaves(); };
+
+            MakeLabel(gameCard, "Your disc, your files.\nNo game data ships with this app.",
+                      18, 364, 404, 40, TextDim, 8.5F, FontStyle.Regular);
+
+            CardPanel launchCard = MakeCard(page, 460, 0, 490, 420, "LAUNCH");
+
+            _play = new AccentButton();
+            _play.Text = "PLAY";
+            _play.Location = new Point(18, 52);
+            _play.Size = new Size(454, 88);
+            _play.Click += delegate { PlayOrPrepare(true); };
+            launchCard.Controls.Add(_play);
+
+            _prepare = MakeButton(launchCard, "Extract / verify", 18, 158, 220, 34);
+            _prepare.Click += delegate { PlayOrPrepare(false); };
+            _settings = MakeButton(launchCard, "Open settings", 252, 158, 220, 34);
+            _settings.Click += delegate { OpenSettings(); };
+
+            MakeLabel(launchCard, "Current setup", 18, 212, 454, 18,
+                      TextDim, 8.5F, FontStyle.Regular);
+            _launchSummary = MakeLabel(launchCard, "", 18, 234, 454, 40,
+                                       TextMain, 9F, FontStyle.Regular);
+
+            MakeLabel(launchCard,
+                      "Settings save automatically.\nYour extracted game folder is reused between sessions.",
+                      18, 304, 454, 44, TextDim, 8.5F, FontStyle.Regular);
+
+            Button quit = MakeButton(launchCard, "Quit", 18, 366, 454, 32);
+            quit.Click += delegate { Close(); };
+
+            CardPanel statusCard = MakeCard(page, 0, 440, 950, 190, "STATUS");
+            _status = MakeLabel(statusCard, "Ready.", 18, 50, 914, 22,
+                                TextMain, 9F, FontStyle.Regular);
+            _statusDetail = MakeLabel(statusCard,
+                                      "Pick your USA disc image or extracted game folder.",
+                                      18, 76, 914, 40, TextDim, 8.5F, FontStyle.Regular);
+
+            _progress = new AccentProgress();
+            _progress.Location = new Point(18, 132);
+            _progress.Size = new Size(914, 10);
+            statusCard.Controls.Add(_progress);
+        }
+
+        private void BuildGraphicsPage(Control page)
+        {
+            CardPanel card = MakeCard(page, 0, 0, 950, 632, "GRAPHICS");
+
+            MakeLabel(card, "Internal resolution (EFB upscale)", 18, 56, 420, 20,
+                      TextMain, 9F, FontStyle.Bold);
+            _resolution = MakeCombo(card, 18, 80, 420);
+            for (int i = 0; i < ResLabels.Length; i++)
+                _resolution.Items.Add(new Choice(ResLabels[i], ResValues[i]));
+            _resolution.SelectedIndexChanged += delegate
+            {
+                UpdateSummary();
+                if (_loaded) SaveSettings();
+            };
+
+            MakeLabel(card,
+                      "The 3D scene renders at this resolution, not the window size. 3x is 1920x1080.",
+                      18, 112, 900, 20, TextDim, 8.5F, FontStyle.Regular);
+
+            MakeLabel(card, "Graphics API", 18, 154, 420, 20,
+                      TextMain, 9F, FontStyle.Bold);
+            _graphics = MakeCombo(card, 18, 178, 420);
+            _graphics.Items.Add(new Choice("Vulkan", "vulkan"));
+            _graphics.Items.Add(new Choice("D3D12", "d3d12"));
+            _graphics.Items.Add(new Choice("OpenGL", "opengl"));
+            _graphics.SelectedIndexChanged += delegate
+            {
+                UpdateSummary();
+                if (_loaded) SaveSettings();
+            };
+
+            MakeLabel(card, "Window mode", 500, 154, 420, 20,
+                      TextMain, 9F, FontStyle.Bold);
+            _window = MakeCombo(card, 500, 178, 420);
+            _window.Items.Add(new Choice("Fullscreen windowed", "borderless"));
+            _window.Items.Add(new Choice("Fullscreen", "fullscreen"));
+            _window.Items.Add(new Choice("Windowed", "windowed"));
+            _window.SelectedIndexChanged += delegate
+            {
+                UpdateSummary();
+                if (_loaded) SaveSettings();
+            };
+
+            MakeLabel(card, "Window title", 18, 236, 420, 20,
+                      TextMain, 9F, FontStyle.Bold);
+            _fps = new CheckBox();
+            _fps.Text = "Show FPS in the window title";
+            _fps.ForeColor = TextMain;
+            _fps.BackColor = Color.Transparent;
+            _fps.FlatStyle = FlatStyle.Flat;
+            _fps.AutoSize = true;
+            _fps.Location = new Point(18, 260);
+            _fps.CheckedChanged += delegate { if (_loaded) SaveSettings(); };
+            card.Controls.Add(_fps);
+
+            MakeLabel(card,
+                      "Fullscreen windowed is borderless at your desktop resolution. Fullscreen uses your monitor's native resolution at 60 Hz and restores the desktop mode on exit.",
+                      18, 306, 900, 44, TextDim, 8.5F, FontStyle.Regular);
+
+            MakeLabel(card, "Framing", 18, 356, 200, 20,
+                      Accent, 9F, FontStyle.Bold);
+
+            MakeLabel(card, "Aspect ratio", 18, 388, 420, 20,
+                      TextMain, 9F, FontStyle.Bold);
+            _aspect = MakeCombo(card, 18, 412, 420);
+            _aspect.Items.Add(new Choice("Auto (game native)", "auto"));
+            _aspect.Items.Add(new Choice("16:9 widescreen", "wide"));
+            _aspect.Items.Add(new Choice("4:3 standard", "standard"));
+            _aspect.Items.Add(new Choice("Stretch", "stretch"));
+            _aspect.SelectedIndexChanged += delegate
+            {
+                UpdateSummary();
+                if (_loaded) SaveSettings();
+            };
+
+            MakeLabel(card,
+                      "Auto keeps 4:3. 16:9 fills a widescreen display.",
+                      500, 388, 420, 20, TextDim, 8.5F, FontStyle.Regular);
+
+            _wideHack = new CheckBox();
+            _wideHack.Text = "Widescreen hack (stretch 3D)";
+            _wideHack.ForeColor = TextMain;
+            _wideHack.BackColor = Color.Transparent;
+            _wideHack.FlatStyle = FlatStyle.Flat;
+            _wideHack.AutoSize = true;
+            _wideHack.Location = new Point(18, 450);
+            _wideHack.CheckedChanged += delegate { if (_loaded) SaveSettings(); };
+            card.Controls.Add(_wideHack);
+
+            MakeLabel(card,
+                      "Aspect ratio sets the output shape. The widescreen hack widens the 3D projection to match it; the 2D HUD may stretch.",
+                      18, 484, 900, 22, TextDim, 8.5F, FontStyle.Regular);
+            MakeLabel(card,
+                      "For a full-width 16:9 picture, choose 16:9 widescreen and enable the widescreen hack.",
+                      18, 512, 900, 22, TextDim, 8.5F, FontStyle.Regular);
+        }
+
+        private void BuildAudioPage(Control page)
+        {
+            CardPanel card = MakeCard(page, 0, 0, 950, 460, "AUDIO");
+
+            MakeLabel(card, "Output", 18, 56, 420, 20,
+                      TextMain, 9F, FontStyle.Bold);
+            _audio = MakeCombo(card, 18, 80, 420);
+            _audio.Items.Add(new Choice("Cubeb (recommended)", "cubeb"));
+            _audio.Items.Add(new Choice("Off", "null"));
+            _audio.SelectedIndexChanged += delegate
+            {
+                if (_loaded) SaveSettings();
+            };
+
+            MakeLabel(card, "Volume", 18, 140, 420, 20,
+                      TextMain, 9F, FontStyle.Bold);
+            _volume = new TrackBar();
+            _volume.Minimum = 0;
+            _volume.Maximum = 100;
+            _volume.TickStyle = TickStyle.None;
+            _volume.SmallChange = 5;
+            _volume.LargeChange = 10;
+            _volume.Value = 100;
+            _volume.BackColor = CardColor;
+            _volume.Location = new Point(14, 164);
+            _volume.Size = new Size(420, 42);
+            _volume.ValueChanged += delegate
+            {
+                _volumeValue.Text = _volume.Value + "%";
+                if (_loaded) SaveSettings();
+            };
+            card.Controls.Add(_volume);
+
+            _volumeValue = MakeLabel(card, "100%", 446, 172, 80, 22,
+                                     TextMain, 9F, FontStyle.Regular);
+
+            MakeLabel(card,
+                      "DSP LLE is always used. If the game is silent, check the Windows volume mixer for rpbb.",
+                      18, 236, 900, 22, TextDim, 8.5F, FontStyle.Regular);
+            MakeLabel(card,
+                      "Choosing Off mutes the game but keeps emulation running normally.",
+                      18, 264, 900, 22, TextDim, 8.5F, FontStyle.Regular);
+        }
+
+        private void BuildControllerPage(Control page)
+        {
+            CardPanel card = MakeCard(page, 0, 0, 950, 500, "CONTROLLER");
+
+            MakeLabel(card, "Controller profile", 18, 56, 420, 20,
+                      TextMain, 9F, FontStyle.Bold);
+            MakeLabel(card, Path.Combine(_userDir, "Config", "GCPadNew.ini"),
+                      18, 82, 900, 22, TextMain, 9F, FontStyle.Regular);
+
+            _controllerStatus = MakeLabel(card, "", 18, 112, 900, 22,
+                                           TextDim, 8.5F, FontStyle.Regular);
+
+            Button openProfile = MakeButton(card, "Open controller profile",
+                                            18, 150, 240, 34);
+            openProfile.Click += delegate { OpenControllerProfile(); };
+            Button openConfig = MakeButton(card, "Open config folder",
+                                           274, 150, 240, 34);
+            openConfig.Click += delegate { OpenSettings(); };
+
+            MakeLabel(card,
+                      "A DualSense profile ships with this release. To use an Xbox, Switch or other pad, open the profile and adjust the SDL mapping, or replace it with a GCPadNew.ini from another ModernGekko build.",
+                      18, 212, 900, 60, TextDim, 8.5F, FontStyle.Regular);
+
+            MakeLabel(card,
+                      "The launcher never edits the game's files. Controller settings live in your user folder.",
+                      18, 290, 900, 22, TextDim, 8.5F, FontStyle.Regular);
+        }
+
+        private static Label MakeLabel(Control parent, string text, int x, int y,
+                                       int width, int height, Color color,
+                                       float size, FontStyle style)
+        {
+            Label label = new Label();
+            label.Text = text;
+            label.Location = new Point(x, y);
+            label.Size = new Size(width, height);
+            label.ForeColor = color;
+            label.BackColor = Color.Transparent;
+            label.Font = new Font("Segoe UI", size, style);
+            label.AutoSize = false;
+            parent.Controls.Add(label);
+            return label;
+        }
+
+        private static TextBox MakeTextBox(Control parent, int x, int y, int width)
+        {
+            TextBox box = new TextBox();
+            box.Location = new Point(x, y);
+            box.Size = new Size(width, 26);
+            box.BackColor = FieldColor;
+            box.ForeColor = TextMain;
+            box.BorderStyle = BorderStyle.FixedSingle;
+            box.Font = new Font("Segoe UI", 9F);
+            parent.Controls.Add(box);
+            return box;
+        }
+
+        private static ComboBox MakeCombo(Control parent, int x, int y, int width)
+        {
+            ComboBox combo = new ComboBox();
+            combo.Location = new Point(x, y);
+            combo.Size = new Size(width, 26);
+            combo.DropDownStyle = ComboBoxStyle.DropDownList;
+            combo.FlatStyle = FlatStyle.Flat;
+            combo.BackColor = FieldColor;
+            combo.ForeColor = TextMain;
+            combo.Font = new Font("Segoe UI", 9F);
+            parent.Controls.Add(combo);
+            return combo;
+        }
+
+        private static Button MakeButton(Control parent, string text, int x, int y,
+                                         int width, int height)
+        {
+            Button button = new Button();
+            button.Text = text;
+            button.Location = new Point(x, y);
+            button.Size = new Size(width, height);
+            button.FlatStyle = FlatStyle.Flat;
+            button.FlatAppearance.BorderColor = CardBorder;
+            button.FlatAppearance.BorderSize = 1;
+            button.BackColor = Color.FromArgb(16, 44, 56);
+            button.ForeColor = TextMain;
+            button.Font = new Font("Segoe UI", 9F);
+            button.UseVisualStyleBackColor = false;
+            parent.Controls.Add(button);
+            return button;
+        }
+
+        private static CardPanel MakeCard(Control parent, int x, int y, int width,
+                                          int height, string title)
+        {
+            CardPanel card = new CardPanel();
+            card.Location = new Point(x, y);
+            card.Size = new Size(width, height);
+            card.Title = title;
+            parent.Controls.Add(card);
+            return card;
+        }
+
+        private void ShowPage(int index)
+        {
+            for (int i = 0; i < _pages.Length; i++)
+                _pages[i].Visible = i == index;
+            for (int i = 0; i < _navs.Length; i++)
+                _navs[i].Active = i == index;
+            if (index == 0)
+                UpdateReadyState();
+        }
+
+        private void LoadSettings()
+        {
+            EnsureConfig(_userDir, _appDir);
+
+            string configPath = Path.Combine(_userDir, "config.ini");
+            string game = GetIniKey(_launcherIni, "Launcher", "Game", string.Empty);
+            if (string.IsNullOrEmpty(game))
+            {
+                string extracted = Path.Combine(_userDir, "game");
+                if (File.Exists(Path.Combine(extracted, "sys", "main.dol")))
+                    game = extracted;
+            }
+            if (string.IsNullOrEmpty(game))
+            {
+                string bundledFolder = Path.Combine(_appDir, "game");
+                if (File.Exists(Path.Combine(bundledFolder, "sys", "main.dol")))
+                    game = bundledFolder;
+                else
+                {
+                    string bundledIso = Path.Combine(_appDir, "game.iso");
+                    if (File.Exists(bundledIso))
+                        game = bundledIso;
+                }
+            }
+            _gameBox.Text = game;
+
+            string resolution = GetIniKey(configPath, "Video", "resolution", DefaultResolution());
+            if (Array.IndexOf(ResValues, resolution) < 0)
+                resolution = DefaultResolution();
+            SelectChoice(_resolution, resolution);
+
+            SelectChoice(_graphics,
+                         GetIniKey(_launcherIni, "Launcher", "Graphics", "vulkan"));
+            SelectChoice(_window,
+                         GetIniKey(_launcherIni, "Launcher", "WindowMode", "borderless"));
+            SelectChoice(_audio,
+                         GetIniKey(_launcherIni, "Launcher", "Audio", "cubeb"));
+            SelectChoice(_aspect,
+                         GetIniKey(configPath, "Video", "aspect", "auto"));
+            _wideHack.Checked = GetIniKey(configPath, "Video", "widescreen_hack", "false")
+                .Equals("true", StringComparison.OrdinalIgnoreCase);
+
+            string fps = GetIniKey(_launcherIni, "Launcher", "ShowFps",
+                          GetIniKey(configPath, "Video", "show_fps_in_title", "true"));
+            _fps.Checked = !fps.Equals("false", StringComparison.OrdinalIgnoreCase);
+
+            int volume = 100;
+            int.TryParse(GetIniKey(configPath, "Video", "volume", "100"), out volume);
+            if (volume < 0) volume = 0;
+            if (volume > 100) volume = 100;
+            _volume.Value = volume;
+            _volumeValue.Text = volume + "%";
+            _volume.Enabled = Selected(_audio) != "null";
+
+            UpdateSummary();
+            UpdateReadyState();
+            UpdateControllerStatus();
+        }
+
+        private void SaveSettings()
+        {
+            SetIniKey(_launcherIni, "Launcher", "Game", _gameBox.Text.Trim());
+            SetIniKey(_launcherIni, "Launcher", "Resolution", Selected(_resolution));
+            SetIniKey(_launcherIni, "Launcher", "Graphics", Selected(_graphics));
+            SetIniKey(_launcherIni, "Launcher", "WindowMode", Selected(_window));
+            SetIniKey(_launcherIni, "Launcher", "ShowFps", _fps.Checked ? "true" : "false");
+            SetIniKey(_launcherIni, "Launcher", "Audio", Selected(_audio));
+            SetIniKey(_launcherIni, "Launcher", "Aspect", Selected(_aspect));
+            SetIniKey(_launcherIni, "Launcher", "WidescreenHack",
+                _wideHack.Checked ? "true" : "false");
+            SetIniKey(_launcherIni, "Launcher", "Volume", _volume.Value.ToString(
+                CultureInfo.InvariantCulture));
+
+            EnsureConfig(_userDir, _appDir);
+
+            string configPath = Path.Combine(_userDir, "config.ini");
+            SetIniKey(configPath, "Video", "resolution", Selected(_resolution));
+            SetIniKey(configPath, "Video", "backend",
+                Selected(_graphics) == "opengl" ? "OpenGL" : "Vulkan");
+            SetIniKey(configPath, "Video", "show_fps_in_title",
+                _fps.Checked ? "true" : "false");
+            SetIniKey(configPath, "Video", "aspect", Selected(_aspect));
+            SetIniKey(configPath, "Video", "widescreen_hack",
+                _wideHack.Checked ? "true" : "false");
+            SetIniKey(configPath, "Video", "mute",
+                Selected(_audio) == "null" ? "true" : "false");
+            SetIniKey(configPath, "Video", "volume",
+                _volume.Value.ToString(CultureInfo.InvariantCulture));
+
+            SetIniKey(Path.Combine(_userDir, "Config", "GFX.ini"),
+                "Settings", "InternalResolution", ResolutionScale(Selected(_resolution)));
+            SetIniKey(Path.Combine(_userDir, "Config", "Dolphin.ini"),
+                "Core", "GFXBackend", GraphicsName(Selected(_graphics)));
+        }
+
+        private static string DefaultResolution()
+        {
+            return "1920x1080";
+        }
+
+        private static string ResolutionScale(string value)
+        {
+            int index = Array.IndexOf(ResValues, value);
+            return index >= 0 ? ResScales[index] : "3";
+        }
+
+        private static string ResolutionLabel(string value)
+        {
+            int index = Array.IndexOf(ResValues, value);
+            return index >= 0 ? ResLabels[index] : ResLabels[2];
+        }
+
+        private static void SelectChoice(ComboBox box, string value)
+        {
+            for (int i = 0; i < box.Items.Count; i++)
+            {
+                Choice choice = box.Items[i] as Choice;
+                if (choice != null && choice.Value == value)
+                {
+                    box.SelectedIndex = i;
+                    return;
+                }
+            }
+            if (box.Items.Count > 0)
+                box.SelectedIndex = 0;
+        }
+
+        private static string Selected(ComboBox box)
+        {
+            Choice choice = box.SelectedItem as Choice;
+            return choice != null ? choice.Value : string.Empty;
+        }
+
+        private static string GraphicsName(string value)
+        {
+            if (value == "d3d12") return "D3D12";
+            if (value == "opengl") return "OpenGL";
+            return "Vulkan";
+        }
+
+        private void UpdateSummary()
+        {
+            if (_launchSummary == null || _resolution == null)
+                return;
+            string graphics = GraphicsName(Selected(_graphics));
+            string window = Selected(_window) == "fullscreen"
+                ? "Fullscreen"
+                : (Selected(_window) == "windowed" ? "Windowed" : "Fullscreen windowed");
+            string framing = Selected(_aspect) == "wide"
+                ? "16:9"
+                : (Selected(_aspect) == "standard"
+                    ? "4:3"
+                    : (Selected(_aspect) == "stretch" ? "Stretch" : "Auto framing (4:3)"));
+            if (_wideHack.Checked)
+                framing += " + widescreen hack";
+            _launchSummary.Text = ResolutionLabel(Selected(_resolution)) +
+                " internal  \u2022  " + graphics +
+                "\n" + window + "  \u2022  " + framing;
+        }
+
+        private void UpdateReadyState()
+        {
+            string game = _gameBox.Text.Trim();
+            bool ready = false;
+            bool folder = false;
+            if (Directory.Exists(game))
+            {
+                folder = File.Exists(Path.Combine(game, "sys", "main.dol"));
+                ready = folder;
+            }
+            else if (File.Exists(game))
+            {
+                string ext = Path.GetExtension(game).ToLowerInvariant();
+                ready = ext == ".iso" || ext == ".gcm";
+            }
+
+            _badge.SetState(ready ? "GBQE78  \u2022  READY" : "NO GAME IMPORTED",
+                            ready ? ReadyGreen : NotReadyRed);
+            _gameStatus.Text = ready
+                ? (folder
+                    ? "USA GBQE78  \u2022  extracted game folder"
+                    : "USA GBQE78  \u2022  disc image selected")
+                : "Pick your USA disc image or extracted folder.";
+            _sideStatus.Text = ready ? "Game files verified" : "Import a disc to begin";
+            if (_statusDetail != null && !_busy && _progress != null && _progress.Value == 0)
+                _statusDetail.Text = ready
+                    ? "Ready to play. Settings save automatically."
+                    : "Pick your USA disc image or extracted game folder.";
+        }
+
+        private void UpdateControllerStatus()
+        {
+            if (_controllerStatus == null)
+                return;
+            string profile = Path.Combine(_userDir, "Config", "GCPadNew.ini");
+            _controllerStatus.Text = File.Exists(profile)
+                ? "DualSense profile installed."
+                : "No controller profile yet. A DualSense profile is installed on first play.";
+        }
+
+        private void BrowseIso()
+        {
+            using (OpenFileDialog dialog = new OpenFileDialog())
+            {
+                dialog.Title = "Pick your Rocket Power: Beach Bandits (USA) disc image";
+                dialog.Filter = "GameCube disc image (*.iso)|*.iso|All files (*.*)|*.*";
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                    _gameBox.Text = dialog.FileName;
+            }
+        }
+
+        private void BrowseFolder()
+        {
+            using (FolderBrowserDialog dialog = new FolderBrowserDialog())
+            {
+                dialog.Description = "Pick the extracted game folder (contains sys\\main.dol and files\\)";
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                    _gameBox.Text = dialog.SelectedPath;
+            }
+        }
+
+        private void OpenSettings()
+        {
+            try { Process.Start("explorer.exe", _userDir); }
+            catch { }
+        }
+
+        private void OpenSaves()
+        {
+            try
+            {
+                string saveDir = Path.Combine(_userDir, "GC");
+                Directory.CreateDirectory(saveDir);
+                Process.Start("explorer.exe", saveDir);
+            }
+            catch { }
+        }
+
+        private void OpenControllerProfile()
+        {
+            string path = Path.Combine(_userDir, "Config", "GCPadNew.ini");
+            if (!File.Exists(path))
+            {
+                EnsureConfig(_userDir, _appDir);
+                UpdateControllerStatus();
+            }
+            if (!File.Exists(path))
+            {
+                MessageBox.Show(this, "The controller profile isn't there yet. Play the game once to create it.",
+                    Text, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            try { Process.Start("notepad.exe", "\"" + path + "\""); }
+            catch { }
+        }
+
+        private Options BuildOptions()
+        {
+            string game = _gameBox.Text.Trim();
+            if (game.Length == 0)
+            {
+                MessageBox.Show(this, "Pick your USA ISO or extracted game folder first.", Text,
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return null;
+            }
+            if (!Directory.Exists(game) && !File.Exists(game))
+            {
+                MessageBox.Show(this, "That game path doesn't exist. Pick it again.", Text,
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
+            }
+
+            SaveSettings();
+
+            Options o = new Options();
+            o.Game = Path.GetFullPath(game);
+            o.Install = _appDir;
+            o.UserDir = _userDir;
+            o.WindowMode = Selected(_window);
+            o.Pass.Add("--graphics");
+            o.Pass.Add(Selected(_graphics));
+            if (Selected(_audio) == "null")
+            {
+                o.Pass.Add("--audio");
+                o.Pass.Add("null");
+            }
+            return o;
+        }
+
+        private void PlayOrPrepare(bool startGame)
+        {
+            if (_busy)
+                return;
+            Options o = BuildOptions();
+            if (o == null)
+                return;
+
+            ShowPage(0);
+            _busy = true;
+            _gameRunning = false;
+            SetControlsEnabled(false);
+            _progress.Value = 0;
+            _status.Text = startGame ? "Preparing..." : "Checking your copy...";
+            _statusDetail.Text = "This can take a minute on the first run.";
+            LastError = null;
+
+            Thread worker = new Thread(delegate()
+            {
+                int code = 1;
+                try
+                {
+                    ProgressSink = UpdateProgress;
+                    code = NeedsPrepare(o) ? Prepare(o) : 0;
+                    if (code == 0 && startGame)
+                    {
+                        BeginInvoke(new Action(delegate
+                        {
+                            _gameRunning = true;
+                            Hide();
+                        }));
+                        code = Start(o);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    code = 2;
+                    LastError = ex.Message;
+                }
+                finally
+                {
+                    ProgressSink = null;
+                }
+
+                int result = code;
+                bool started = startGame;
+                BeginInvoke(new Action(delegate
+                {
+                    if (started)
+                    {
+                        _gameRunning = false;
+                        Show();
+                        Activate();
+                    }
+                    _busy = false;
+                    SetControlsEnabled(true);
+                    if (result == 0)
+                    {
+                        _status.Text = started ? "Game closed." : "Game files ready.";
+                        _statusDetail.Text = started
+                            ? "Settings save automatically."
+                            : "You can press Play now.";
+                        _progress.Value = 100;
+                    }
+                    else
+                    {
+                        _status.Text = started ? "The game couldn't start." : "That copy couldn't be used.";
+                        _statusDetail.Text = string.IsNullOrEmpty(LastError)
+                            ? "Check your USA ISO or extracted folder, then try again."
+                            : LastError;
+                        MessageBox.Show(this, _statusDetail.Text, Text,
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                }));
+            });
+            worker.IsBackground = true;
+            worker.Start();
+        }
+
+        private void SetControlsEnabled(bool enabled)
+        {
+            _play.Enabled = enabled;
+            _prepare.Enabled = enabled;
+            _gameBox.Enabled = enabled;
+            _resolution.Enabled = enabled;
+            _graphics.Enabled = enabled;
+            _window.Enabled = enabled;
+            _audio.Enabled = enabled;
+            _aspect.Enabled = enabled;
+            _fps.Enabled = enabled;
+            _wideHack.Enabled = enabled;
+            _volume.Enabled = enabled && Selected(_audio) != "null";
+        }
+
+        private void UpdateProgress(double fraction, string text)
+        {
+            if (IsDisposed || !IsHandleCreated)
+                return;
+            try
+            {
+                BeginInvoke(new Action(delegate
+                {
+                    if (IsDisposed)
+                        return;
+                    int value = (int)Math.Round(fraction * 100.0);
+                    if (value < 0) value = 0;
+                    if (value > 100) value = 100;
+                    _progress.Value = value;
+                    _status.Text = text;
+                }));
+            }
+            catch { }
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (_gameRunning)
+            {
+                DialogResult result = MessageBox.Show(this,
+                    "The game is still running. Close the launcher anyway?",
+                    Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (result != DialogResult.Yes)
+                    e.Cancel = true;
+            }
+            if (!e.Cancel)
+            {
+                try { SaveSettings(); }
+                catch { }
+            }
+            base.OnFormClosing(e);
+        }
     }
 
     private static class NativeWindow
