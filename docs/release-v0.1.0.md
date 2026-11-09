@@ -6,8 +6,10 @@ Native Windows release of **Rocket Power: Beach Bandits** (GameCube, USA, `GBQE7
 
 - Runs at a locked **60 FPS** on ModernGekko's JIT core.
 - DSP LLE audio, SDL controller input, DualSense profile included.
+- Fullscreen windowed (borderless, default), exclusive fullscreen (1920x1080 at
+  60 Hz, desktop mode restored on exit), and windowed modes.
 - Supports [RecompLauncher](https://recomplauncher.com): pick your own USA ISO or
-  extracted folder, choose resolution and graphics, and press Play.
+  extracted folder, choose resolution, graphics and window mode, and press Play.
 - First setup extracts an ISO automatically and verifies the USA dump.
 
 ## Requirements
@@ -39,4 +41,4 @@ Native Windows release of **Rocket Power: Beach Bandits** (GameCube, USA, `GBQE7
 
 `RocketPower-Recomp-v0.1.0-Windows-x64.zip`
 
-SHA-256: `2C3F1B7170A4CE89E53061375DDDE185FCCF37089C0E87EF3BD15705536F082F`
+SHA-256: `95A6D1826D7604796AED16029FC0A3D168CF086E200436829F66F7546695497B`

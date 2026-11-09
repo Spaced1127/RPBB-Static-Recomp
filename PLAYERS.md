@@ -50,6 +50,15 @@ live in `%LOCALAPPDATA%\RocketPowerRecomp`:
 - `Config/GCPadNew.ini` — controller mapping.
 - `config.ini` — window title FPS display and 2D-screen compatibility.
 
+Window mode is a launch option (and a RecompLauncher setting):
+
+- **Fullscreen windowed** — borderless at your desktop resolution (default).
+- **Fullscreen** — 1920×1080 at 60 Hz, with the desktop mode restored on exit.
+- **Windowed** — the normal window.
+
+The game is natively 4:3, so fullscreen modes preserve the aspect and pillarbox on a
+16:9 display.
+
 ## RecompLauncher
 
 This release supports [RecompLauncher](https://recomplauncher.com). Pick your own USA

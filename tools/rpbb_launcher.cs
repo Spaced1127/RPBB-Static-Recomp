@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 
 internal static class Program
 {
@@ -20,6 +22,7 @@ internal static class Program
         public string Game;
         public string Install;
         public string UserDir;
+        public string WindowMode = "borderless";
         public readonly List<string> Pass = new List<string>();
     }
 
@@ -71,6 +74,8 @@ internal static class Program
                 o.Install = Next(args, ref i);
             else if (a == "--user-dir")
                 o.UserDir = Next(args, ref i);
+            else if (a == "--window-mode")
+                o.WindowMode = Next(args, ref i).ToLowerInvariant();
             else
                 o.Pass.Add(a);
         }
@@ -370,11 +375,69 @@ internal static class Program
                 process.BeginErrorReadLine();
                 try { process.PriorityClass = ProcessPriorityClass.High; }
                 catch { }
-                process.WaitForExit();
-                process.WaitForExit();
-                return process.ExitCode;
+                ApplyWindowMode(process, o.WindowMode);
+                try
+                {
+                    process.WaitForExit();
+                    process.WaitForExit();
+                    return process.ExitCode;
+                }
+                finally
+                {
+                    NativeWindow.Restore();
+                }
             }
         }
+    }
+
+    private static void ApplyWindowMode(Process process, string mode)
+    {
+        if (string.IsNullOrEmpty(mode) || mode == "windowed")
+            return;
+
+        NativeWindow.SetProcessDpiAwareness();
+        IntPtr hwnd = WaitForMainWindow(process, 30000);
+        if (hwnd == IntPtr.Zero)
+            return;
+
+        NativeWindow.Enter(hwnd, mode == "fullscreen");
+
+        // The runner can put its File/View menu back when the window is resized or
+        // the game changes scenes. Keep it off while the game owns the screen.
+        Thread watcher = new Thread(delegate()
+        {
+            while (true)
+            {
+                try
+                {
+                    if (process.HasExited)
+                        break;
+                    NativeWindow.RemoveMenu(hwnd);
+                }
+                catch
+                {
+                    break;
+                }
+                Thread.Sleep(500);
+            }
+        });
+        watcher.IsBackground = true;
+        watcher.Start();
+    }
+
+    private static IntPtr WaitForMainWindow(Process process, int timeoutMs)
+    {
+        int waited = 0;
+        while (waited < timeoutMs)
+        {
+            process.Refresh();
+            IntPtr hwnd = process.MainWindowHandle;
+            if (hwnd != IntPtr.Zero)
+                return hwnd;
+            Thread.Sleep(100);
+            waited += 100;
+        }
+        return IntPtr.Zero;
     }
 
     private static void EnsureConfig(string userDir, string appDir)
@@ -574,5 +637,261 @@ internal static class Program
     {
         Console.Error.WriteLine(message);
         Console.Error.Flush();
+    }
+
+    private static class NativeWindow
+    {
+        private const int GWL_STYLE = -16;
+        private const int GWL_EXSTYLE = -20;
+        private const long WS_CAPTION = 0x00C00000L;
+        private const long WS_THICKFRAME = 0x00040000L;
+        private const long WS_MINIMIZEBOX = 0x00020000L;
+        private const long WS_MAXIMIZEBOX = 0x00010000L;
+        private const long WS_SYSMENU = 0x00080000L;
+        private const long WS_POPUP = 0x80000000L;
+        private const long WS_VISIBLE = 0x10000000L;
+        private const long WS_EX_DLGMODALFRAME = 0x00000001L;
+        private const long WS_EX_CLIENTEDGE = 0x00000200L;
+        private const long WS_EX_STATICEDGE = 0x00020000L;
+        private const long WS_EX_WINDOWEDGE = 0x00000100L;
+        private const uint MONITOR_DEFAULTTONEAREST = 2;
+        private const int ENUM_CURRENT_SETTINGS = -1;
+        private const int CDS_FULLSCREEN = 0x00000004;
+        private const int DISP_CHANGE_SUCCESSFUL = 0;
+        private const uint DM_PELSWIDTH = 0x00080000;
+        private const uint DM_PELSHEIGHT = 0x00100000;
+        private const uint DM_DISPLAYFREQUENCY = 0x00400000;
+        private const uint DM_BITSPERPEL = 0x00040000;
+        private const uint SWP_FRAMECHANGED = 0x0020;
+        private const uint SWP_SHOWWINDOW = 0x0040;
+        private const uint SWP_NOOWNERZORDER = 0x0200;
+        private const int SW_SHOW = 5;
+
+        private static bool _saved;
+        private static bool _modeChanged;
+        private static IntPtr _hwnd;
+        private static IntPtr _style;
+        private static IntPtr _exStyle;
+        private static IntPtr _menu;
+        private static RECT _rect;
+        private static string _device;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct MONITORINFOEX
+        {
+            public int cbSize;
+            public RECT rcMonitor;
+            public RECT rcWork;
+            public uint dwFlags;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+            public string szDevice;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct DEVMODE
+        {
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+            public string dmDeviceName;
+            public short dmSpecVersion;
+            public short dmDriverVersion;
+            public short dmSize;
+            public short dmDriverExtra;
+            public uint dmFields;
+            public int dmPositionX;
+            public int dmPositionY;
+            public uint dmDisplayOrientation;
+            public uint dmDisplayFixedOutput;
+            public short dmColor;
+            public short dmDuplex;
+            public short dmYResolution;
+            public short dmTTOption;
+            public short dmCollate;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+            public string dmFormName;
+            public short dmLogPixels;
+            public uint dmBitsPerPel;
+            public uint dmPelsWidth;
+            public uint dmPelsHeight;
+            public uint dmDisplayFlags;
+            public uint dmDisplayFrequency;
+            public uint dmICMMethod;
+            public uint dmICMIntent;
+            public uint dmMediaType;
+            public uint dmDitherType;
+            public uint dmReserved1;
+            public uint dmReserved2;
+            public uint dmPanningWidth;
+            public uint dmPanningHeight;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetProcessDPIAware();
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFOEX info);
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+        private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+        private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
+
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hwnd, int command);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hwnd);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetMenu(IntPtr hwnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetMenu(IntPtr hwnd, IntPtr menu);
+
+        [DllImport("user32.dll")]
+        private static extern bool DrawMenuBar(IntPtr hwnd);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern bool EnumDisplaySettings(string device, int mode, ref DEVMODE modeInfo);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int ChangeDisplaySettingsEx(string device, ref DEVMODE mode, IntPtr hwnd,
+                                                          uint flags, IntPtr param);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int ChangeDisplaySettingsEx(string device, IntPtr mode, IntPtr hwnd,
+                                                          uint flags, IntPtr param);
+
+        public static void SetProcessDpiAwareness()
+        {
+            try
+            {
+                SetProcessDpiAwarenessContext(new IntPtr(-4));
+            }
+            catch
+            {
+                try { SetProcessDPIAware(); }
+                catch { }
+            }
+        }
+
+        public static void RemoveMenu(IntPtr hwnd)
+        {
+            if (hwnd == IntPtr.Zero)
+                return;
+            SetMenu(hwnd, IntPtr.Zero);
+            DrawMenuBar(hwnd);
+        }
+
+        public static void Enter(IntPtr hwnd, bool changeMode)
+        {
+            if (_saved)
+                return;
+
+            _hwnd = hwnd;
+            _style = GetWindowLongPtr(hwnd, GWL_STYLE);
+            _exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+            _menu = GetMenu(hwnd);
+            SetMenu(hwnd, IntPtr.Zero);
+            DrawMenuBar(hwnd);
+            GetWindowRect(hwnd, out _rect);
+
+            MONITORINFOEX monitor = MonitorInfo(hwnd);
+            _device = monitor.szDevice;
+
+            if (changeMode && TrySetMode())
+            {
+                _modeChanged = true;
+                monitor = MonitorInfo(hwnd);
+            }
+
+            long style = _style.ToInt64();
+            long exStyle = _exStyle.ToInt64();
+            style &= ~(WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU);
+            style |= WS_POPUP | WS_VISIBLE;
+            exStyle &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE | WS_EX_WINDOWEDGE);
+            SetWindowLongPtr(hwnd, GWL_STYLE, new IntPtr(style));
+            SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(exStyle));
+
+            SetWindowPos(hwnd, IntPtr.Zero, monitor.rcMonitor.Left, monitor.rcMonitor.Top,
+                         monitor.rcMonitor.Right - monitor.rcMonitor.Left,
+                         monitor.rcMonitor.Bottom - monitor.rcMonitor.Top,
+                         SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOOWNERZORDER);
+            ShowWindow(hwnd, SW_SHOW);
+            SetForegroundWindow(hwnd);
+            _saved = true;
+        }
+
+        public static void Restore()
+        {
+            if (!_saved)
+                return;
+
+            if (_modeChanged)
+            {
+                try { ChangeDisplaySettingsEx(_device, IntPtr.Zero, IntPtr.Zero, 0, IntPtr.Zero); }
+                catch { }
+                _modeChanged = false;
+            }
+
+            if (_hwnd != IntPtr.Zero)
+            {
+                SetMenu(_hwnd, _menu);
+                DrawMenuBar(_hwnd);
+                SetWindowLongPtr(_hwnd, GWL_STYLE, _style);
+                SetWindowLongPtr(_hwnd, GWL_EXSTYLE, _exStyle);
+                SetWindowPos(_hwnd, IntPtr.Zero, _rect.Left, _rect.Top,
+                             _rect.Right - _rect.Left, _rect.Bottom - _rect.Top,
+                             SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOOWNERZORDER);
+            }
+
+            _saved = false;
+        }
+
+        private static MONITORINFOEX MonitorInfo(IntPtr hwnd)
+        {
+            IntPtr monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            MONITORINFOEX info = new MONITORINFOEX();
+            info.cbSize = Marshal.SizeOf(typeof(MONITORINFOEX));
+            GetMonitorInfo(monitor, ref info);
+            return info;
+        }
+
+        private static bool TrySetMode()
+        {
+            DEVMODE mode = new DEVMODE();
+            mode.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
+            if (!EnumDisplaySettings(_device, ENUM_CURRENT_SETTINGS, ref mode))
+                return false;
+
+            mode.dmPelsWidth = 1920;
+            mode.dmPelsHeight = 1080;
+            mode.dmDisplayFrequency = 60;
+            mode.dmBitsPerPel = 32;
+            mode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY | DM_BITSPERPEL;
+            return ChangeDisplaySettingsEx(_device, ref mode, IntPtr.Zero, CDS_FULLSCREEN, IntPtr.Zero) ==
+                   DISP_CHANGE_SUCCESSFUL;
+        }
     }
 }

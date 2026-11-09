@@ -69,10 +69,19 @@ They are stored under `%LOCALAPPDATA%\RocketPowerRecomp`:
 |---|---|---|
 | Internal resolution | `Config/GFX.ini` | `Settings/InternalResolution` (1, 2 or 3) |
 | Graphics API | command line | `--graphics vulkan|d3d12|opengl` |
+| Window mode | command line | `--window-mode borderless|fullscreen|windowed` |
 | Show FPS | `config.ini` | `Video/show_fps_in_title` |
 
+Window modes:
+
+- **Fullscreen windowed (default)** — borderless at your desktop resolution.
+- **Fullscreen** — switches the display to 1920×1080 at 60 Hz and restores the desktop
+  mode when the game exits.
+- **Windowed** — the runner’s normal window.
+
 Defaults: Vulkan, 3x internal resolution (1920×1584, suitable for 1080p), 60 FPS speed
-limit, DSP LLE, Cubeb audio.
+limit, DSP LLE, Cubeb audio. The game is natively 4:3; the fullscreen modes preserve
+that aspect and pillarbox on a 16:9 display.
 
 ## Audio
 

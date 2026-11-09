@@ -26,7 +26,7 @@
   },
   "start": {
     "program": ["rpbb_launch.exe"],
-    "args": ["--game", "{game}", "--install", "{install}", "--user-dir", "{local}/RocketPowerRecomp"],
+    "args": ["--game", "{game}", "--install", "{install}", "--user-dir", "{local}/RocketPowerRecomp", "--window-mode", "borderless"],
     "env": {
       "MODERNGEKKO_STATICRECOMP": "0"
     }
@@ -117,6 +117,17 @@
         { "label": "Vulkan", "args": ["--graphics", "vulkan"] },
         { "label": "D3D12", "args": ["--graphics", "d3d12"] },
         { "label": "OpenGL", "args": ["--graphics", "opengl"] }
+      ]
+    },
+    {
+      "id": "window",
+      "label": "Window mode",
+      "in": "args",
+      "help": "Fullscreen windowed is borderless at your desktop resolution. Fullscreen changes the display mode to 1920x1080 at 60 Hz.",
+      "choices": [
+        { "label": "Fullscreen windowed", "args": ["--window-mode", "borderless"] },
+        { "label": "Fullscreen", "args": ["--window-mode", "fullscreen"] },
+        { "label": "Windowed", "args": ["--window-mode", "windowed"] }
       ]
     },
     {
