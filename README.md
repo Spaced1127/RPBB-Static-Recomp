@@ -174,11 +174,12 @@ are not committed.
 Release packaging:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\make_release_rpbb.ps1 -Version 0.1.0
+powershell -ExecutionPolicy Bypass -File tools\make_release_rpbb.ps1 -Version 0.1.1
 ```
 
-This writes `dist/RocketPower-Recomp-v0.1.0-Windows-x64.zip` with
-`recomplauncher.json` at the top of the release folder, next to `moderngekko-run.exe`.
+This writes `dist/RocketPower-Recomp-v0.1.1-Windows-x64.zip` with
+`recomplauncher.json` at the top of the release folder, next to `rpbb.exe` and
+`rpbb-launcher.exe`.
 
 ## Layout
 
