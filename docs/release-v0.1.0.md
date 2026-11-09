@@ -10,7 +10,8 @@ Native Windows release of **Rocket Power: Beach Bandits** (GameCube, USA, `GBQE7
   resolution at 60 Hz, desktop mode restored on exit), and windowed modes.
 - Supports [RecompLauncher](https://recomplauncher.com): pick your own USA ISO or
   extracted folder, choose resolution, graphics and window mode, and press Play.
-- First setup extracts an ISO automatically and verifies the USA dump.
+- First setup extracts an ISO automatically, verifies its `GBQE78` ID and DOL hash,
+  and checks the ISO against the verified USA dump.
 
 ## Requirements
 
@@ -41,4 +42,4 @@ Native Windows release of **Rocket Power: Beach Bandits** (GameCube, USA, `GBQE7
 
 `RocketPower-Recomp-v0.1.0-Windows-x64.zip`
 
-SHA-256: `634B5DBBFAB4911D115BF97E7A6D92603ECF1E1272405E1B7A95D01B1F69B9F4`
+SHA-256: `4116CFDAB51F89B714C47A4F567A21F7F4E4D744C3790C4BB0E487596EC9637C`

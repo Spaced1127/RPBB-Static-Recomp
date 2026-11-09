@@ -15,8 +15,9 @@ This release supports [RecompLauncher](https://recomplauncher.com): install the
 recomp, pick your own ISO or extracted folder, choose resolution and graphics, and
 press Play. The included `recomplauncher.json` provides:
 
-- **Easy setup** — pick the USA ISO (or extracted folder); the disc is identified by
-  its `GBQE78` ID and checked against the verified Redump USA dump.
+- **Easy setup** — pick the USA ISO (or extracted folder); the setup helper verifies the
+  disc's `GBQE78` ID and DOL hash, and the launcher checks the ISO against the verified
+  Redump USA dump.
 - **Settings** — internal resolution, graphics API (Vulkan / D3D12 / OpenGL) and the
   FPS title display.
 - **Full setup** — the ISO is extracted to a local game folder by `rpbb_launch.exe`,

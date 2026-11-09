@@ -7,7 +7,6 @@
     "kind": "iso_or_folder",
     "label": "Your copy of Rocket Power: Beach Bandits (USA, GBQE78): the disc image (.iso) or the extracted folder containing sys/main.dol and files/.",
     "check": {
-      "ids": ["GBQE78"],
       "file": "sys/main.dol"
     },
     "dumps": [
