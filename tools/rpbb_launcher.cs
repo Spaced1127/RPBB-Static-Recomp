@@ -885,8 +885,6 @@ internal static class Program
             if (!EnumDisplaySettings(_device, ENUM_CURRENT_SETTINGS, ref mode))
                 return false;
 
-            mode.dmPelsWidth = 1920;
-            mode.dmPelsHeight = 1080;
             mode.dmDisplayFrequency = 60;
             mode.dmBitsPerPel = 32;
             mode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY | DM_BITSPERPEL;

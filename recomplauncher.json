@@ -123,7 +123,7 @@
       "id": "window",
       "label": "Window mode",
       "in": "args",
-      "help": "Fullscreen windowed is borderless at your desktop resolution. Fullscreen changes the display mode to 1920x1080 at 60 Hz.",
+      "help": "Fullscreen windowed is borderless at your desktop resolution. Fullscreen uses your monitor's native resolution at 60 Hz.",
       "choices": [
         { "label": "Fullscreen windowed", "args": ["--window-mode", "borderless"] },
         { "label": "Fullscreen", "args": ["--window-mode", "fullscreen"] },

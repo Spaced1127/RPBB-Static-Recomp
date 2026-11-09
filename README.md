@@ -75,8 +75,8 @@ They are stored under `%LOCALAPPDATA%\RocketPowerRecomp`:
 Window modes:
 
 - **Fullscreen windowed (default)** — borderless at your desktop resolution.
-- **Fullscreen** — switches the display to 1920×1080 at 60 Hz and restores the desktop
-  mode when the game exits.
+- **Fullscreen** — switches the display to your monitor’s native resolution at 60 Hz
+  and restores the desktop mode when the game exits.
 - **Windowed** — the runner’s normal window.
 
 Defaults: Vulkan, 3x internal resolution (1920×1584, suitable for 1080p), 60 FPS speed
