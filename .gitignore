@@ -1,0 +1,25 @@
+# game data / generated
+work/
+build/
+moderngekko-modules/
+extracted/
+*.log
+*.png
+!docs/**/*.png
+
+# toolchain checkouts (vendored from SB-RFD)
+lib/
+
+# generated release packages
+dist/
+
+# binaries
+*.dll
+*.exe
+*.obj
+*.pdb
+*.ilk
+
+# python caches
+__pycache__/
+*.pyc
