@@ -174,10 +174,10 @@ are not committed.
 Release packaging:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\make_release_rpbb.ps1 -Version 0.1.1
+powershell -ExecutionPolicy Bypass -File tools\make_release_rpbb.ps1 -Version 0.1.2
 ```
 
-This writes `dist/RocketPower-Recomp-v0.1.1-Windows-x64.zip` with
+This writes `dist/RocketPower-Recomp-v0.1.2-Windows-x64.zip` with
 `recomplauncher.json` at the top of the release folder, next to `rpbb.exe` and
 `rpbb-launcher.exe`.
 

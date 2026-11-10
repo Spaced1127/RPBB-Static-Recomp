@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.1.1",
+    [string]$Version = "0.1.2",
     [string]$Runner = "H:\Projects\RPBB-GCN-Recomp\vendor\rpbb.exe",
     [string]$Sys = "H:\Projects\SB-RFD\dist\SpongeBobRecomp-Release-v0.1.2\Sys",
     [string]$Licenses = "H:\Projects\SB-RFD\dist\SpongeBobRecomp-Release-v0.1.2\LICENSES"
