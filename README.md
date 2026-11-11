@@ -1,5 +1,7 @@
 # RPBB Static Recomp — Rocket Power: Beach Bandits (GameCube, Windows)
 
+[![Get it on RecompLauncher](https://recomplauncher.com/assets/press/launcher/badge-dark.svg)](https://recomplauncher.com/game/rpbb-static-recomp)
+
 A native Windows port of **Rocket Power: Beach Bandits** (`GBQE78`, USA). The playable
 release runs on ModernGekko's JIT core at a locked **60 FPS**, with DSP LLE audio and
 SDL controller input. The repository also contains the DolRecomp **static C module**
