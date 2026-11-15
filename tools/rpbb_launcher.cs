@@ -528,10 +528,8 @@ internal static class Program
             EnsureIniKey(frontend, "Video", "efb_access", "true");
         }
 
-        string controller = Path.Combine(configDir, "GCPadNew.ini");
-        string defaultController = Path.Combine(appDir, "defaults", "GCPadNew.ini");
-        if (!File.Exists(controller) && File.Exists(defaultController))
-            File.Copy(defaultController, controller);
+        // The runner detects the connected controller and writes GCPadNew.ini
+        // itself, so a bundled DualSense profile must not mask another pad.
     }
 
     private static void EnsureIniKey(string path, string section, string key, string value)
@@ -1599,12 +1597,12 @@ internal static class Program
             openConfig.Click += delegate { OpenSettings(); };
 
             MakeLabel(card,
-                      "A DualSense profile ships with this release. To use an Xbox, Switch or other pad, open the profile and adjust the SDL mapping, or replace it with a GCPadNew.ini from another ModernGekko build.",
-                      18, 212, 900, 60, TextDim, 8.5F, FontStyle.Regular);
+                      "Xbox, PlayStation, Switch Pro and generic SDL controllers are detected automatically. To remap buttons, open the profile after the first run.",
+                      18, 212, 900, 40, TextDim, 8.5F, FontStyle.Regular);
 
             MakeLabel(card,
                       "The launcher never edits the game's files. Controller settings live in your user folder.",
-                      18, 290, 900, 22, TextDim, 8.5F, FontStyle.Regular);
+                      18, 270, 900, 22, TextDim, 8.5F, FontStyle.Regular);
         }
 
         private static Label MakeLabel(Control parent, string text, int x, int y,
@@ -1885,8 +1883,8 @@ internal static class Program
                 return;
             string profile = Path.Combine(_userDir, "Config", "GCPadNew.ini");
             _controllerStatus.Text = File.Exists(profile)
-                ? "DualSense profile installed."
-                : "No controller profile yet. A DualSense profile is installed on first play.";
+                ? "Profile ready. The connected controller is mapped automatically."
+                : "A profile is generated for the connected controller on first play.";
         }
 
         private void BrowseIso()

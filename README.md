@@ -29,8 +29,9 @@ press Play. The included `recomplauncher.json` provides:
 
 - Windows 10 or 11, x64.
 - A Vulkan-capable GPU (D3D12 and OpenGL are selectable if Vulkan has driver issues).
-- A controller. The bundled profile is for a DualSense; other SDL controllers can be
-  mapped in `Config/GCPadNew.ini`.
+- Any SDL gamepad: Xbox, DualSense, Switch Pro or a generic controller. The runner
+  detects the connected pad and generates or updates `Config/GCPadNew.ini`
+  automatically.
 - Your own **Rocket Power: Beach Bandits (USA, GBQE78)** disc image (`.iso`) or an
   extracted game folder containing `sys/main.dol` and `files/`.
 
@@ -127,21 +128,31 @@ copy the `.gci` files from your Dolphin memory card into that folder. Card image
 
 ## Controls
 
-The bundled `defaults/GCPadNew.ini` maps a DualSense. The GameCube controls are:
+The runner detects Xbox, PlayStation, Switch Pro and generic SDL controllers and
+writes the standard SDL gamepad mapping for the connected pad. The GameCube controls
+are:
 
-| GameCube | Action | DualSense (bundled) |
+| GameCube | Action | Standard SDL gamepad |
 |---|---|---|
-| A | Jump / confirm | Cross |
-| B | Cancel / attack | Circle |
-| X / Y | Actions | Square / Triangle |
-| Start | Pause | Options |
+| A | Jump / confirm | South face button (A / Cross / B on Switch) |
+| B | Cancel / attack | East face button (B / Circle / A on Switch) |
+| X / Y | Actions | West / North face buttons |
+| Start | Pause | Start / Options / Plus |
 | Left stick / D-pad | Move | Left stick / D-pad |
 | C stick | Camera | Right stick |
-| L / R | Triggers | L2 / R2 |
+| L / R | Triggers | Left / right triggers |
 
-For an Xbox or Switch Pro controller, edit `Config/GCPadNew.ini` and set the `Device`
-line to the SDL name of your controller, or delete the file to use SDL's default
-mapping. A controller is required; this build has no keyboard gameplay mapping.
+The profile is generated on first play and its `Device` line is updated when you
+switch controllers. To customize buttons, edit
+
+```
+%LOCALAPPDATA%\RocketPowerRecomp\Config\GCPadNew.ini
+```
+
+Deleting that file makes the runner generate a fresh profile for the connected pad.
+If you customize the mapping, add `controller_profile=manual` under `[Input]` in
+`config.ini` so the automatic profile refresh does not overwrite your edits. A
+controller is required; this build has no keyboard gameplay mapping.
 
 ## Verified dump
 
@@ -176,10 +187,10 @@ are not committed.
 Release packaging:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\make_release_rpbb.ps1 -Version 0.1.2
+powershell -ExecutionPolicy Bypass -File tools\make_release_rpbb.ps1 -Version 0.1.3
 ```
 
-This writes `dist/RocketPower-Recomp-v0.1.2-Windows-x64.zip` with
+This writes `dist/RocketPower-Recomp-v0.1.3-Windows-x64.zip` with
 `recomplauncher.json` at the top of the release folder, next to `rpbb.exe` and
 `rpbb-launcher.exe`.
 
@@ -188,7 +199,7 @@ This writes `dist/RocketPower-Recomp-v0.1.2-Windows-x64.zip` with
 ```
 tools/      build, packaging and launcher helpers
 docs/       project state and investigation notes
-defaults/   controller profile shipped with the release
+defaults/   reference controller mapping for manual use
 work/       extracted disc, game root, logs and evidence (ignored)
 build/      recompiler output (ignored)
 lib/        upstream recompiler/runtime checkouts (ignored)

@@ -2,31 +2,34 @@
 
 ## Controls
 
-The release is built for a controller. The bundled profile is for a DualSense; the
-GameCube pad buttons map as follows.
+The release is built for a controller. Xbox, PlayStation, Switch Pro and generic SDL
+gamepads are detected automatically; the runner generates or updates the profile for
+the connected pad.
 
-| GameCube | Action | DualSense |
+| GameCube | Action | Standard SDL gamepad |
 |---|---|---|
-| A | Jump / confirm | Cross |
-| B | Cancel / attack | Circle |
-| X | Action 1 | Square |
-| Y | Action 2 | Triangle |
-| Start | Pause | Options |
+| A | Jump / confirm | South face button (A / Cross / B on Switch) |
+| B | Cancel / attack | East face button (B / Circle / A on Switch) |
+| X | Action 1 | West face button |
+| Y | Action 2 | North face button |
+| Start | Pause | Start / Options / Plus |
 | Left stick | Move | Left stick |
 | D-pad | Move | D-pad |
 | C stick | Camera | Right stick |
-| L / R | Triggers | L2 / R2 |
+| L / R | Triggers | Left / right triggers |
 
 Rumble is enabled through the controller profile.
 
-For an Xbox or Switch Pro controller, edit
+To customize the mapping, edit
 
 ```
 %LOCALAPPDATA%\RocketPowerRecomp\Config\GCPadNew.ini
 ```
 
-and set the `Device` line to the SDL name of your controller. Deleting the file lets
-SDL use its default mapping. There is no keyboard gameplay mapping in this build.
+Deleting that file makes the runner generate a fresh profile for the connected pad.
+If you customize the mapping, add `controller_profile=manual` under `[Input]` in
+`config.ini` so the automatic refresh does not overwrite your edits. There is no
+keyboard gameplay mapping in this build.
 
 ## Save data
 
