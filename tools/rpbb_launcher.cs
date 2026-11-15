@@ -105,9 +105,13 @@ internal static class Program
             return PrepareFolder(o.Game);
 
         if (File.Exists(o.Game))
+        {
+            if (LooksLikeRvz(o.Game))
+                return PrepareRvz(o);
             return PrepareImage(o);
+        }
 
-        Error("That path doesn't exist. Pick your .iso or the extracted game folder.");
+        Error("That path doesn't exist. Pick your .iso, .rvz or the extracted game folder.");
         return 2;
     }
 
@@ -116,7 +120,7 @@ internal static class Program
         string dol = Path.Combine(folder, "sys", "main.dol");
         if (!File.Exists(dol))
         {
-            Error("That folder doesn't contain sys/main.dol. Pick the extracted game folder, or the .iso.");
+            Error("That folder doesn't contain sys/main.dol. Pick the extracted game folder, or an .iso/.rvz.");
             return 2;
         }
 
@@ -131,18 +135,132 @@ internal static class Program
         return 0;
     }
 
+    private static bool LooksLikeRvz(string path)
+    {
+        try
+        {
+            using (FileStream fs = File.OpenRead(path))
+            {
+                if (fs.Length < 4)
+                    return false;
+                int a = fs.ReadByte();
+                int b = fs.ReadByte();
+                int c = fs.ReadByte();
+                int d = fs.ReadByte();
+                return a == 'R' && b == 'V' && c == 'Z' && d == 1;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static int PrepareImage(Options o)
     {
         string ext = Path.GetExtension(o.Game).ToLowerInvariant();
-        if (ext == ".rvz" || ext == ".wia" || ext == ".gcz" || ext == ".ciso" || ext == ".wbfs")
+        if (ext == ".wia" || ext == ".gcz" || ext == ".ciso" || ext == ".wbfs")
         {
-            Error("That's a compressed " + ext + " image. In Dolphin, right-click the game, " +
-                  "Convert File, ISO, then pick the .iso here.");
+            Error("That's a compressed " + ext + " image. This build accepts .iso and .rvz; " +
+                  "convert this format to one of those first.");
             return 2;
         }
 
-        string dest = Path.Combine(o.UserDir, "game");
-        using (FileStream fs = File.OpenRead(o.Game))
+        return ExtractIsoToGame(o.Game, o.UserDir, SourceStamp(o.Game), 0.02, 0.98);
+    }
+
+    private static int PrepareRvz(Options o)
+    {
+        string appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
+        string converter = Path.Combine(appDir, "rvz_extract.exe");
+        if (!File.Exists(converter))
+        {
+            Error("rvz_extract.exe is missing from the install folder. Extract the release zip again.");
+            return 2;
+        }
+
+        string tempIso = Path.Combine(Path.GetTempPath(),
+            "rpbb-rvz-" + Guid.NewGuid().ToString("N") + ".iso");
+        try
+        {
+            Progress(0.02, "Decoding RVZ...");
+            int code = RunRvzExtract(converter, o.Game, tempIso);
+            if (code != 0)
+            {
+                string detail = string.IsNullOrEmpty(LastError) ? "" : " (" + LastError + ")";
+                Error("That RVZ image couldn't be decoded. Verify the file is complete and try again." +
+                      detail);
+                return 2;
+            }
+
+            Progress(0.68, "Reading the disc header");
+            return ExtractIsoToGame(tempIso, o.UserDir, SourceStamp(o.Game), 0.68, 0.32);
+        }
+        catch (Exception ex)
+        {
+            Error("Couldn't decode that RVZ: " + ex.Message);
+            return 2;
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(tempIso))
+                    File.Delete(tempIso);
+            }
+            catch
+            {
+                // A leftover temp ISO can be removed by the OS later.
+            }
+        }
+    }
+
+    private static int RunRvzExtract(string converter, string rvzPath, string isoPath)
+    {
+        ProcessStartInfo psi = new ProcessStartInfo(converter,
+            "\"" + rvzPath + "\" \"" + isoPath + "\" --progress");
+        psi.UseShellExecute = false;
+        psi.CreateNoWindow = true;
+        psi.RedirectStandardOutput = true;
+        psi.RedirectStandardError = true;
+        psi.WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory;
+
+        using (Process process = new Process())
+        {
+            process.StartInfo = psi;
+            process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e)
+            {
+                if (e.Data == null)
+                    return;
+                if (e.Data.StartsWith("progress ", StringComparison.Ordinal))
+                {
+                    string[] parts = e.Data.Split(' ');
+                    double fraction;
+                    if (parts.Length >= 2 && double.TryParse(parts[1],
+                            NumberStyles.Float, CultureInfo.InvariantCulture, out fraction))
+                    {
+                        Progress(0.02 + 0.64 * fraction, "Decoding RVZ...");
+                    }
+                }
+            };
+            process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
+            {
+                if (e.Data != null)
+                    LastError = e.Data;
+            };
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            process.WaitForExit();
+            return process.ExitCode;
+        }
+    }
+
+    private static int ExtractIsoToGame(string isoPath, string userDir, string sourceStamp,
+                                        double progressBase, double progressSpan)
+    {
+        string dest = Path.Combine(userDir, "game");
+        using (FileStream fs = File.OpenRead(isoPath))
         {
             byte[] head = ReadAt(fs, 0, 0x2440);
             uint magic = Be32(head, 0x1C);
@@ -154,7 +272,7 @@ internal static class Program
                 return 2;
             }
 
-            Progress(0.02, "Reading the disc header");
+            Progress(progressBase, "Reading the disc header");
             try
             {
                 if (Directory.Exists(dest))
@@ -164,23 +282,24 @@ internal static class Program
             {
                 // A previous extraction that can't be removed is replaced file by file below.
             }
-            Extract(fs, head, dest);
+            Extract(fs, head, dest, progressBase, progressSpan);
         }
 
         try
         {
-            File.WriteAllText(Path.Combine(dest, "source.txt"), SourceStamp(o.Game));
+            File.WriteAllText(Path.Combine(dest, "source.txt"), sourceStamp);
         }
         catch
         {
             // The marker only skips re-extraction; a failed write just means it runs again.
         }
 
-        Progress(1.0, "Game files ready");
+        Progress(progressBase + progressSpan, "Game files ready");
         return 0;
     }
 
-    private static void Extract(FileStream fs, byte[] head, string dest)
+    private static void Extract(FileStream fs, byte[] head, string dest,
+                                double progressBase, double progressSpan)
     {
         string sys = Path.Combine(dest, "sys");
         string files = Path.Combine(dest, "files");
@@ -196,7 +315,7 @@ internal static class Program
 
         byte[] app = ReadAt(fs, 0x2440, 0x20);
         long appSize = 0x20 + Be32(app, 0x14) + Be32(app, 0x18);
-        Progress(0.08, "Writing system files");
+        Progress(progressBase + 0.04 * progressSpan, "Writing system files");
         CopyRange(fs, 0x2440, appSize, Path.Combine(sys, "apploader.img"));
 
         byte[] dolHeader = ReadAt(fs, dolOffset, 0x100);
@@ -227,7 +346,9 @@ internal static class Program
             if (percent / 10 != lastPercent / 10)
             {
                 lastPercent = percent;
-                Progress(0.15 + 0.8 * done / Math.Max(1, total), "Extracting " + f.Path);
+                Progress(progressBase + 0.10 * progressSpan +
+                         0.86 * progressSpan * done / Math.Max(1, total),
+                         "Extracting " + f.Path);
             }
         }
 
@@ -1363,7 +1484,7 @@ internal static class Program
 
             MakeLabel(gameCard, "Rocket Power: Beach Bandits", 18, 50, 404, 24,
                       TextMain, 12F, FontStyle.Bold);
-            _gameStatus = MakeLabel(gameCard, "Pick your USA disc image or extracted folder.",
+            _gameStatus = MakeLabel(gameCard, "Pick your USA .iso/.rvz or extracted folder.",
                                     18, 78, 404, 20, TextDim, 8.5F, FontStyle.Regular);
 
             MakeLabel(gameCard, "Game copy", 18, 112, 404, 18,
@@ -1377,10 +1498,10 @@ internal static class Program
 
             Button browseFolder = MakeButton(gameCard, "Browse folder", 18, 172, 196, 30);
             browseFolder.Click += delegate { BrowseFolder(); };
-            Button browseIso = MakeButton(gameCard, "Browse ISO...", 226, 172, 196, 30);
+            Button browseIso = MakeButton(gameCard, "Browse image...", 226, 172, 196, 30);
             browseIso.Click += delegate { BrowseIso(); };
 
-            MakeLabel(gameCard, "An ISO is extracted and verified on first play.",
+            MakeLabel(gameCard, "An ISO or RVZ is extracted and verified on first play.",
                       18, 212, 404, 20, TextDim, 8.5F, FontStyle.Regular);
 
             MakeLabel(gameCard, "Disc ID", 18, 252, 110, 18, TextDim, 8.5F, FontStyle.Regular);
@@ -1427,7 +1548,7 @@ internal static class Program
             _status = MakeLabel(statusCard, "Ready.", 18, 50, 914, 22,
                                 TextMain, 9F, FontStyle.Regular);
             _statusDetail = MakeLabel(statusCard,
-                                      "Pick your USA disc image or extracted game folder.",
+                                      "Pick your USA .iso/.rvz or extracted game folder.",
                                       18, 76, 914, 40, TextDim, 8.5F, FontStyle.Regular);
 
             _progress = new AccentProgress();
@@ -1597,7 +1718,7 @@ internal static class Program
             openConfig.Click += delegate { OpenSettings(); };
 
             MakeLabel(card,
-                      "Xbox, PlayStation, Switch Pro and generic SDL controllers are detected automatically. To remap buttons, open the profile after the first run.",
+                      "Xbox, PlayStation, Switch Pro, DualSense Edge, Xbox Elite Series 1/2, 8BitDo and generic SDL controllers are detected automatically by GUID and live SDL mapping. To remap buttons, open the profile after the first run.",
                       18, 212, 900, 40, TextDim, 8.5F, FontStyle.Regular);
 
             MakeLabel(card,
@@ -1709,6 +1830,12 @@ internal static class Program
                     string bundledIso = Path.Combine(_appDir, "game.iso");
                     if (File.Exists(bundledIso))
                         game = bundledIso;
+                    else
+                    {
+                        string bundledRvz = Path.Combine(_appDir, "game.rvz");
+                        if (File.Exists(bundledRvz))
+                            game = bundledRvz;
+                    }
                 }
             }
             _gameBox.Text = game;
@@ -1860,7 +1987,7 @@ internal static class Program
             else if (File.Exists(game))
             {
                 string ext = Path.GetExtension(game).ToLowerInvariant();
-                ready = ext == ".iso" || ext == ".gcm";
+                ready = ext == ".iso" || ext == ".gcm" || ext == ".rvz";
             }
 
             _badge.SetState(ready ? "GBQE78  \u2022  READY" : "NO GAME IMPORTED",
@@ -1869,12 +1996,12 @@ internal static class Program
                 ? (folder
                     ? "USA GBQE78  \u2022  extracted game folder"
                     : "USA GBQE78  \u2022  disc image selected")
-                : "Pick your USA disc image or extracted folder.";
+                : "Pick your USA .iso/.rvz or extracted folder.";
             _sideStatus.Text = ready ? "Game files verified" : "Import a disc to begin";
             if (_statusDetail != null && !_busy && _progress != null && _progress.Value == 0)
                 _statusDetail.Text = ready
                     ? "Ready to play. Settings save automatically."
-                    : "Pick your USA disc image or extracted game folder.";
+                    : "Pick your USA .iso/.rvz or extracted game folder.";
         }
 
         private void UpdateControllerStatus()
@@ -1892,7 +2019,7 @@ internal static class Program
             using (OpenFileDialog dialog = new OpenFileDialog())
             {
                 dialog.Title = "Pick your Rocket Power: Beach Bandits (USA) disc image";
-                dialog.Filter = "GameCube disc image (*.iso)|*.iso|All files (*.*)|*.*";
+                dialog.Filter = "GameCube disc image (*.iso;*.rvz)|*.iso;*.rvz|All files (*.*)|*.*";
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                     _gameBox.Text = dialog.FileName;
             }
@@ -1948,7 +2075,7 @@ internal static class Program
             string game = _gameBox.Text.Trim();
             if (game.Length == 0)
             {
-                MessageBox.Show(this, "Pick your USA ISO or extracted game folder first.", Text,
+                MessageBox.Show(this, "Pick your USA ISO/RVZ or extracted game folder first.", Text,
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return null;
             }
@@ -2044,7 +2171,7 @@ internal static class Program
                     {
                         _status.Text = started ? "The game couldn't start." : "That copy couldn't be used.";
                         _statusDetail.Text = string.IsNullOrEmpty(LastError)
-                            ? "Check your USA ISO or extracted folder, then try again."
+                            ? "Check your USA ISO/RVZ or extracted folder, then try again."
                             : LastError;
                         MessageBox.Show(this, _statusDetail.Text, Text,
                             MessageBoxButtons.OK, MessageBoxIcon.Warning);

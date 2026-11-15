@@ -15,6 +15,7 @@ foreach ($p in @($Runner, $Sys, $Licenses, (Join-Path $root "recomplauncher.json
                  (Join-Path $root "README.md"), (Join-Path $root "PLAYERS.md"),
                  (Join-Path $root "run.bat"), (Join-Path $root "tools\rpbb_launcher.cs"),
                  (Join-Path $root "tools\set_icon.cs"),
+                 (Join-Path $root "tools\bin\rvz_extract.exe"),
                  (Join-Path $root "assets\rpbb.ico"),
                  (Join-Path $root "assets\rpbb-launcher.ico"),
                  (Join-Path $root "defaults\GCPadNew.ini"))) {
@@ -45,6 +46,7 @@ Copy-Item -LiteralPath (Join-Path $root "recomplauncher.json") -Destination $sta
 Copy-Item -LiteralPath (Join-Path $root "README.md") -Destination $stage -Force
 Copy-Item -LiteralPath (Join-Path $root "PLAYERS.md") -Destination $stage -Force
 Copy-Item -LiteralPath (Join-Path $root "run.bat") -Destination $stage -Force
+Copy-Item -LiteralPath (Join-Path $root "tools\bin\rvz_extract.exe") -Destination $stage -Force
 Copy-Item -LiteralPath (Join-Path $root "defaults\GCPadNew.ini") -Destination (Join-Path $stage "defaults") -Force
 Set-Content -LiteralPath (Join-Path $stage "VERSION") -Value "v$Version" -Encoding ASCII
 
@@ -55,8 +57,9 @@ It must contain:
   sys\main.dol
   files\
 
-Or run run.bat with the path to your ISO:
+Or run run.bat with the path to your ISO or RVZ:
   run.bat "D:\Rocket Power Beach Bandits.iso"
+  run.bat "D:\Rocket Power Beach Bandits.rvz"
 "@
 Set-Content -LiteralPath (Join-Path $stage "game\README.txt") -Value $gameReadme -Encoding ASCII
 

@@ -5,7 +5,7 @@
   "repo": "Spaced1127/RPBB-Static-Recomp",
   "game": {
     "kind": "iso_or_folder",
-    "label": "Your copy of Rocket Power: Beach Bandits (USA, GBQE78): the disc image (.iso) or the extracted folder containing sys/main.dol and files/.",
+    "label": "Your copy of Rocket Power: Beach Bandits (USA, GBQE78): the disc image (.iso; the standalone launcher also accepts .rvz) or the extracted folder containing sys/main.dol and files/.",
     "check": {
       "file": "sys/main.dol"
     },

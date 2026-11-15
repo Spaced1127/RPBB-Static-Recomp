@@ -17,9 +17,10 @@ This release supports [RecompLauncher](https://recomplauncher.com): install the
 recomp, pick your own ISO or extracted folder, choose resolution and graphics, and
 press Play. The included `recomplauncher.json` provides:
 
-- **Easy setup** — pick the USA ISO (or extracted folder); the setup helper verifies the
-  disc's `GBQE78` ID and DOL hash, and the launcher checks the ISO against the verified
-  Redump USA dump.
+- **Easy setup** — pick the USA ISO/RVZ (or extracted folder); the setup helper
+  verifies the disc's `GBQE78` ID and DOL hash, and checks the image against the
+  verified Redump USA dump. The standalone launcher and `run.bat` accept `.rvz`
+  directly; RecompLauncher's own picker currently offers `.iso` and folders.
 - **Settings** — internal resolution from 1x (640×528) to 12x (7680×4320), graphics
   API (Vulkan / D3D12 / OpenGL), window mode and the FPS title display.
 - **Full setup** — the ISO is extracted to a local game folder by `rpbb-launcher.exe`,
@@ -29,11 +30,11 @@ press Play. The included `recomplauncher.json` provides:
 
 - Windows 10 or 11, x64.
 - A Vulkan-capable GPU (D3D12 and OpenGL are selectable if Vulkan has driver issues).
-- Any SDL gamepad: Xbox, DualSense, Switch Pro or a generic controller. The runner
-  detects the connected pad and generates or updates `Config/GCPadNew.ini`
-  automatically.
-- Your own **Rocket Power: Beach Bandits (USA, GBQE78)** disc image (`.iso`) or an
-  extracted game folder containing `sys/main.dol` and `files/`.
+- Any SDL gamepad: Xbox, DualSense, DualSense Edge, Xbox Elite Series 1/2,
+  Switch Pro or a generic controller. The runner detects the connected pad and
+  generates or updates `Config/GCPadNew.ini` automatically.
+- Your own **Rocket Power: Beach Bandits (USA, GBQE78)** disc image (`.iso` or
+  `.rvz`) or an extracted game folder containing `sys/main.dol` and `files/`.
 
 The verified dump is the USA release (`DL-DOL-GBQE-USA`), 1,459,978,240 bytes,
 CRC32 `8BE53CE8`.
@@ -43,22 +44,26 @@ CRC32 `8BE53CE8`.
 ### RecompLauncher (recommended)
 
 Install the latest release from RecompLauncher, open the game, and pick your copy.
-The first setup extracts an ISO automatically. Press Play.
+The first setup extracts an ISO automatically. Press Play. The standalone launcher
+and `run.bat` also accept `.rvz`; RecompLauncher's own picker currently offers `.iso`
+and folders.
 
 ### Standalone
 
 1. Extract the release zip.
-2. Run `rpbb-launcher.exe` and pick your USA ISO or extracted game folder (a folder in
-   `game/` and a RecompLauncher extraction are detected automatically).
-3. Set resolution, graphics API and window mode, then press **Play**. The first ISO run
-   extracts the disc to `%LOCALAPPDATA%\RocketPowerRecomp\game`.
+2. Run `rpbb-launcher.exe` and pick your USA ISO/RVZ or extracted game folder (a
+   folder in `game/` and a RecompLauncher extraction are detected automatically).
+3. Set resolution, graphics API and window mode, then press **Play**. The first image
+   run extracts the disc to `%LOCALAPPDATA%\RocketPowerRecomp\game`; RVZ is decoded by
+   the included `rvz_extract.exe`.
 4. `rpbb.exe` is the game runtime; the launcher starts it in JIT mode at 60 FPS.
 
 `run.bat` and `rpbb-launcher.exe` also work from the command line:
 
 ```
 rpbb-launcher.exe --prepare --game "D:\dump.iso" --user-dir "%LOCALAPPDATA%\RocketPowerRecomp"
-rpbb-launcher.exe --game "D:\dump.iso" --user-dir "%LOCALAPPDATA%\RocketPowerRecomp"
+rpbb-launcher.exe --prepare --game "D:\dump.rvz" --user-dir "%LOCALAPPDATA%\RocketPowerRecomp"
+rpbb-launcher.exe --game "D:\dump.rvz" --user-dir "%LOCALAPPDATA%\RocketPowerRecomp"
 ```
 
 For an extracted folder, point `--game` at the folder.
@@ -153,6 +158,30 @@ Deleting that file makes the runner generate a fresh profile for the connected p
 If you customize the mapping, add `controller_profile=manual` under `[Input]` in
 `config.ini` so the automatic profile refresh does not overwrite your edits. A
 controller is required; this build has no keyboard gameplay mapping.
+
+Detection is GUID-level (SDL bus/VID/PID), not name-based. The DualSense Edge
+(`054c:0df2`, USB and Bluetooth) uses the DualSense layout. Xbox Elite Series 1
+(`045e:02e3`) and Series 2 (`045e:0b00`, `045e:0b05`, `045e:0b22`) use the standard
+Xbox layout. Their paddles and the Edge Fn button are intentionally unbound; map
+them to duplicate buttons in the vendor app if you want paddle shortcuts. Standard
+pads leave the D-pad alone; a firmware that reports reversed D-pad left/right is
+corrected, and Switch pads swap only the printed A/B/X/Y labels.
+
+8BitDo Pro 2, SN30, SF30 and Switch-mode pads report Nintendo-style live SDL
+bindings (`a:b1,b:b0` or `a:b3,b:b2`); the runner reads those bindings and applies
+the A/B/X/Y swap automatically. 8BitDo Ultimate and 64 pads report standard
+`a:b0,b:b1` bindings and stay standard. A reversed D-pad report is corrected.
+Generated profiles migrate on the next launch; hand-edited profiles are preserved.
+Set `controller_profile=switch` (or `nintendo`) to force the Nintendo swap.
+
+If a pad is mapped wrongly, send the runner's startup line:
+
+```
+controller: "<name>" guid=<32 hex> bus=usb|bluetooth vid=<4 hex> pid=<4 hex> layout=<xbox|playstation|switch|generic> source=<guid|mapping|type|default> dpad_swap=<no|yes> face_swap=<no|yes> paddles=unbound extras=unbound family="<model>"
+```
+
+`paddles=unbound` and `extras=unbound` appear only on pads that have those
+buttons. Include the following `controller configuration: ... (... layout)` line too.
 
 ## Verified dump
 

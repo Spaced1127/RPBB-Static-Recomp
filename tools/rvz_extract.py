@@ -135,7 +135,7 @@ def read_compressed_table(f, offset: int, size: int, compression: int, expect: i
     return data
 
 
-def extract(rvz_path: Path, iso_path: Path):
+def extract(rvz_path: Path, iso_path: Path, progress: bool = False):
     with rvz_path.open("rb") as f:
         head = f.read(0x48)
         if len(head) != 0x48 or head[:4] != RVZ_MAGIC:
@@ -242,20 +242,27 @@ def extract(rvz_path: Path, iso_path: Path):
                     out.seek(aligned_off + i * chunk_size)
                     out.write(chunk)
 
-                    if (i + 1) % 256 == 0 or i + 1 == groups:
+                    if progress and ((i + 1) % 256 == 0 or i + 1 == groups):
+                        done = aligned_off + (i + 1) * chunk_size
+                        pct = min(1.0, done / iso_size)
+                        print(f"progress {pct:.3f} groups {i + 1}/{groups}", flush=True)
+                    elif not progress and ((i + 1) % 256 == 0 or i + 1 == groups):
                         done = aligned_off + (i + 1) * chunk_size
                         pct = min(100, done * 100 // iso_size)
                         print(f"\r  groups {i + 1:,}/{groups:,}  {pct:3d}%", end="", flush=True)
-                print()
+                if not progress:
+                    print()
 
     print(f"Wrote {iso_path} ({iso_path.stat().st_size:,} bytes)")
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 3:
+    args = [arg for arg in argv[1:] if arg != "--progress"]
+    progress = len(args) != len(argv) - 1
+    if len(args) != 2:
         print(__doc__.strip())
         return 2
-    extract(Path(argv[1]), Path(argv[2]))
+    extract(Path(args[0]), Path(args[1]), progress)
     return 0
 
 
