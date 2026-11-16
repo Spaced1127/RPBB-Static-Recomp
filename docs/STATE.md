@@ -1,6 +1,16 @@
 # Project state
 
-Updated: 2026-11-08
+Updated: 2026-11-16
+
+## Working rules
+
+- **Quiet mode is lifted (user directive, 2026-11-16).** Launch test apps
+  normally so their windows are visible on the user's desktop. Do not use the
+  hidden-desktop helper (`run-hidden.ps1`), do not minimise, move, hide or
+  suppress windows, and do not force-kill a test app's window. Stop a test app
+  through its own exit path (automation `stop` or a normal close). If a visible
+  run is disruptive, the user decides.
+- Never commit `dist/`, `work/`, logs, build outputs or game data.
 
 ## Latest verified result
 
