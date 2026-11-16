@@ -130,6 +130,11 @@ DolRecomp (patched SB-RFD build) generated:
      device, so no save is stranded).
    - Any further 60 FPS/GPU smoke beyond the recorded 59.94 FPS boot.
    Host-side work can continue: card-image parsing, offline matrix, analysis.
+   Host-side review found one residual risk for the next patch: the legacy
+   `.gci` import switches to the raw card even when some/all GCI files fail to
+   parse (`imported != legacy.gci_files.size()`); add a guard that keeps the
+   folder device in that case. Documented in
+   `docs/notes/memcard-hotfix-2026-11-16.md`.
 1. **Controller + memory-card hotfix (v0.2.1).** v0.2.0 players reported Xbox
    pads doing nothing and saves hanging at the card check. Controller root cause:
    the runner wrote `GCPadNew.ini` from an SDL session without Dolphin's hints, so

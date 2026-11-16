@@ -100,6 +100,17 @@ re-checked:
   keeping the folder device if creation fails, so an old save cannot be
   stranded.
 
+## Residual risk (next patch)
+
+`ImportLegacyCard` returns the number of saves imported, and
+`ConfigureMemoryCards` treats any count `>= 0` as success. If every `.gci`
+fails to parse, or only some of them import, the install still switches to the
+raw card and the unimported saves are no longer visible (the files remain under
+`GC/<region>/Card A`, but there is no UI to switch the device back). A future
+patch should keep the folder device when `imported != legacy.gci_files.size()`
+(or at least when `imported == 0`) and log the count. The fresh-install and
+normal-save paths are unaffected.
+
 ## Test caveats
 
 - A force-kill (`taskkill /F`, `run-hidden` timeout) skips the card flush. Use
