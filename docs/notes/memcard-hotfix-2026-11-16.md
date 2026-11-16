@@ -62,6 +62,23 @@ shown on the user's desktop.
 Evidence: `work/evidence/memcard-2026-11-16/` (card image and the save prompt,
 create-save, load-list, Continue-title and loaded-gameplay screenshots).
 
+### Offline card-image check (host-side)
+
+`tools/check_card_image.py` parses the saved raw card without launching anything:
+
+```text
+size:  16,777,216 bytes (2048 blocks)
+header checksum: stored=d520/29e2 computed=d520/29e2 OK
+directory checksum: stored=0174/ee8e computed=0174/ee8e OK
+slot 1: game=GBQE company=78 name='Sam' first=5 blocks=10 chain=10 bat=1 OK
+RESULT: OK
+```
+
+The directory entry is `GBQE78` / `Sam` with a 10-block chain that terminates
+correctly in the active BAT (block 4). Header and directory additive/inverse
+checksums both match, so the card is a valid 128 Mbit Dolphin raw card, not just
+a file of the right size.
+
 ### Final artifact (runtime bootstrap added)
 
 The v0.2.1 zip was rebuilt after the shared runtime bootstrap landed, and

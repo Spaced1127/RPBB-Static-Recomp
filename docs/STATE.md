@@ -4,12 +4,17 @@ Updated: 2026-11-16
 
 ## Working rules
 
-- **Quiet mode is lifted (user directive, 2026-11-16).** Launch test apps
-  normally so their windows are visible on the user's desktop. Do not use the
-  hidden-desktop helper (`run-hidden.ps1`), do not minimise, move, hide or
-  suppress windows, and do not force-kill a test app's window. Stop a test app
-  through its own exit path (automation `stop` or a normal close). If a visible
-  run is disruptive, the user decides.
+- **GUI/test launches are PAUSED (hub directive, 2026-11-16).** The user is on
+  the machine; do not launch any window, launcher, game executable or audio
+  source until the hub lifts the pause. Host-side work only: code, analysis,
+  offline/console tests, builds and docs. Do not hide anything and do not launch
+  anything. Blocked test actions are listed under "Next actions".
+- **Quiet mode is lifted (user directive, 2026-11-16).** When launches resume,
+  launch test apps normally so their windows are visible on the user's desktop.
+  Do not use the hidden-desktop helper (`run-hidden.ps1`), do not minimise, move,
+  hide or suppress windows, and do not force-kill a test app's window. Stop a
+  test app through its own exit path (automation `stop` or a normal close). If a
+  visible run is disruptive, the user decides.
 - Never commit `dist/`, `work/`, logs, build outputs or game data.
 
 ## Latest verified result
@@ -116,7 +121,16 @@ DolRecomp (patched SB-RFD build) generated:
 
 ## Next actions
 
-0. **Controller + memory-card hotfix (v0.2.1).** v0.2.0 players reported Xbox
+0. **BLOCKED by the GUI pause (recorded 2026-11-16):**
+   - Physical Xbox 360 / One / Series / Elite button walk-through on v0.2.1
+     (needs a connected pad and one visible game run).
+   - 8BitDo Pro 2 Nintendo/standard mode confirmation on v0.2.1.
+   - Legacy `GC/<region>/Card A/*.gci` -> raw card migration end to end (needs a
+     GCI sample and one visible run; the code path falls back to the folder
+     device, so no save is stranded).
+   - Any further 60 FPS/GPU smoke beyond the recorded 59.94 FPS boot.
+   Host-side work can continue: card-image parsing, offline matrix, analysis.
+1. **Controller + memory-card hotfix (v0.2.1).** v0.2.0 players reported Xbox
    pads doing nothing and saves hanging at the card check. Controller root cause:
    the runner wrote `GCPadNew.ini` from an SDL session without Dolphin's hints, so
    `Device = SDL/0/<name>` could name a driver Dolphin never creates, and the RPBB
