@@ -595,6 +595,13 @@ internal static class Program
                 "GFXBackend = Vulkan" + Environment.NewLine +
                 "DSPHLE = False" + Environment.NewLine +
                 "EmulationSpeed = 1.0" + Environment.NewLine +
+                // Raw 128 Mbit card in slot A, empty slot B. SlotA must not be
+                // left unset (Dolphin defaults to the GCI folder, which needs
+                // GC/<region>/Card A and can hang the card probe) and SlotB
+                // must not be 0 (Dummy device, the game reports the slot as
+                // unsupported and the new-file flow stops).
+                "SlotA = 1" + Environment.NewLine +
+                "SlotB = 255" + Environment.NewLine +
                 Environment.NewLine +
                 "[DSP]" + Environment.NewLine +
                 "Backend = Cubeb" + Environment.NewLine +
@@ -609,6 +616,11 @@ internal static class Program
         {
             EnsureIniKey(dolphin, "Core", "DSPHLE", "False");
             EnsureIniKey(dolphin, "Core", "EmulationSpeed", "1.0");
+            // Force the card slots on upgraded installs too: a profile that
+            // still has SlotA=8 (GCI folder) or SlotB=0 (Dummy) would keep
+            // hanging the same way.
+            EnsureIniKey(dolphin, "Core", "SlotA", "1");
+            EnsureIniKey(dolphin, "Core", "SlotB", "255");
             EnsureIniKey(dolphin, "DSP", "Backend", "Cubeb");
         }
 

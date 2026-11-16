@@ -40,11 +40,15 @@
       "ensure": {
         "Core/DSPHLE": "False",
         "Core/EmulationSpeed": "1.0",
+        "Core/SlotA": "1",
+        "Core/SlotB": "255",
         "DSP/Backend": "Cubeb"
       },
       "always": {
         "Core/DSPHLE": "False",
         "Core/EmulationSpeed": "1.0",
+        "Core/SlotA": "1",
+        "Core/SlotB": "255",
         "DSP/Backend": "Cubeb"
       },
       "new": {
@@ -52,6 +56,8 @@
         "Core/GFXBackend": "Vulkan",
         "Core/DSPHLE": "False",
         "Core/EmulationSpeed": "1.0",
+        "Core/SlotA": "1",
+        "Core/SlotB": "255",
         "DSP/Backend": "Cubeb",
         "DSP/DSPThread": "True",
         "DSP/Muted": "False",

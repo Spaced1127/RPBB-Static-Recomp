@@ -106,6 +106,22 @@ DolRecomp (patched SB-RFD build) generated:
 
 ## Next actions
 
+0. **Controller + memory-card hotfix (v0.2.1).** v0.2.0 players reported Xbox
+   pads doing nothing and saves hanging at the card check. Controller root cause:
+   the runner wrote `GCPadNew.ini` from an SDL session without Dolphin's hints, so
+   `Device = SDL/0/<name>` could name a driver Dolphin never creates, and the RPBB
+   build had no `FindDevice` fallback. Memory card: slot A was left at Dolphin's
+   GCI-folder default and the user tree was not guaranteed before EXI init. Shared
+   fixes are in the ModernGekko sources; the launcher and `recomplauncher.json`
+   force `SlotA = 1` / `SlotB = 255`, and the runtime creates/migrates the raw card
+   before boot. RPBB owns `tools/controller_matrix_test.cpp` (38 checks, all pass)
+   and the memcard evidence. Released as v0.2.1
+   (`dist/RocketPower-Recomp-v0.2.1-Windows-x64.zip`, SHA-256
+   `87940668E45472C6F174EA7B4003D6D60C7DAF9EA7DE48EC5B550B862D2D3CCE`): a real
+   save wrote `GC/MemoryCardA.USA.raw` (16,777,216 bytes, SHA-256 `62B7A9EF...`)
+   and a restart loaded it; the artifact booted at 59.94 FPS.
+   See `docs/notes/controller-regression-2026-11-16.md` and
+   `docs/notes/memcard-hotfix-2026-11-16.md`.
 1. A/B the PGO build vs the non-PGO Clang build in the same gameplay scene; record FPS
    and audio sync. If PGO wins, use it for the final package.
 2. Package the standalone launcher/runner (mirroring SB-RFD `dist/`), with a project-local
