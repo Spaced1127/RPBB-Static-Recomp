@@ -144,7 +144,7 @@ DolRecomp (patched SB-RFD build) generated:
    `profile=written` then `profile=static` with an unchanged SHA; forced
    `controller_class=nintendo` logged `class=nintendo`; missing device bound
    the first SDL pad; 59.94 FPS; fresh card 16,777,216 bytes. Release v0.2.2
-   staged (SHA-256 `EAEE73818FEEBFE07D81BC54929728053A310C9E6BC5000D62E8F27FA645D6FF`).
+   published (SHA-256 `EAEE73818FEEBFE07D81BC54929728053A310C9E6BC5000D62E8F27FA645D6FF`).
    Physical button presses, Switch/8BitDo hardware and unplug/replug hot-plug
    still need a player report.
 2. **Controller + memory-card hotfix (v0.2.1).** v0.2.0 players reported Xbox

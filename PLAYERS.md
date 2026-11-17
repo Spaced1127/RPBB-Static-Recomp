@@ -50,7 +50,7 @@ Send the startup line if a pad is mapped wrongly:
 controller: name="SDL/0/<name>" guid=<32 hex> type=<SDL gamepad type> class=<positional|nintendo> device="<bound device>" source=<auto|override|vendor-fallback|default> dpad=normal profile=<static|missing>
 ```
 
-`class=auto` in `config.ini` is shown as the resolved class. Include the following
+The line prints the resolved class; `override=` echoes `controller_class` from `config.ini`. Include the following
 `controller: configured device missing; bound "..."` line if it appears.
 
 ## Save data
