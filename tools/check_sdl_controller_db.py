@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Audit the shipped SDL controller database against the RPBB detection rules.
+"""Audit the shipped SDL controller database against the canonical system.
 
-Reads ModernGekko's vendored SDL_gamepad_db.h and reports, per vendor:
-  - how many rows exist,
-  - rows whose live ``a`` binding sorts after ``b`` (the 8BitDo/Nintendo signal),
+Reads ModernGekko's vendored SDL_gamepad_db.h and reports:
+  - rows whose live ``a`` binding sorts after ``b`` (informational: the class
+    rule no longer uses it, but a Microsoft row with a>b must still be zero),
   - rows whose ``dpleft`` is a higher raw button than ``dpright`` (normal for
-    many pads; must NOT be read as a reversed D-pad),
-  - whether the row would be caught by the GUID table in controller_layout.hpp.
+    many pads; the canonical system never reads this),
+  - the 8BitDo / Switch-mode GUID fallback pairs and 8BitDo candidates observed
+    in the database (validate with a real pad before adding one).
 
 Usage: python tools/check_sdl_controller_db.py [--db PATH]
 """
@@ -100,25 +101,24 @@ def main():
         print(f"  {label:<24} {len(items):>3} rows")
     print(f"  total: {len(high_left)} rows\n")
 
-    # The known table in controller_layout.hpp, kept in sync by hand.
-    known = {
-        0x054C: {0x0DF2, 0x0CE6, 0x09CC, 0x05C4, 0x0268},
-        0x045E: {0x02E3, 0x0B00, 0x0B05, 0x0B22, 0x028E, 0x0B12, 0x0B13,
-                 0x02D1, 0x02DD, 0x02E0, 0x02EA, 0x02FD, 0x02FF},
-        0x057E: {0x2009, 0x2006, 0x2007, 0x2008},
-    }
+    print("8BitDo / Switch-mode GUID fallback (the only per-device knowledge):")
+    # Must match IsNintendoLabelVendorPair in LayoutClass.h.
+    fallback = {(0x2DC8, 0x6006), (0x05AC, 0x0004)}
+    for vendor, product in sorted(fallback):
+        rows_for_pair = [row for row in rows if row[3] == vendor and row[4] == product]
+        state = "present in DB" if rows_for_pair else "not in DB (runtime fallback)"
+        print(f"  {vendor:04x}:{product:04x}  {state}")
 
-    print("Known-table coverage per family:")
-    for vendor, products in known.items():
-        have = {row[4] for row in rows if row[3] == vendor}
-        missing = sorted(have - products)
-        label = FAMILIES.get(vendor, f"vendor {vendor:04x}")
-        print(f"  {label:<24} db PIDs={len(have):>3} "
-              f"table={len(products):>2} falls back to vendor family: "
-              f"{', '.join(f'{pid:04x}' for pid in missing) or 'none'}")
-    print("\nVendor family fallback (controller_layout.hpp) covers every unknown "
-          "PID for 045e/054c/057e, so an unlisted SKU never reaches the "
-          "Nintendo mapping rule.")
+    candidates = sorted({(row[3], row[4]) for row in rows
+                         if row[3] in (0x2DC8, 0x05AC)
+                         and (row[3], row[4]) not in fallback})
+    print("  other 8BitDo PIDs (validate with a real pad before adding):")
+    for vendor, product in candidates[:20]:
+        print(f"    {vendor:04x}:{product:04x}")
+    print("\nThe canonical system has no vendor/type table. A pad is positional "
+          "unless SDL reports a Switch type or its GUID pair is in the fallback, "
+          "so an unlisted pad can only be wrong if it prints Nintendo labels while "
+          "reporting STANDARD/UNKNOWN.")
 
 
 if __name__ == "__main__":

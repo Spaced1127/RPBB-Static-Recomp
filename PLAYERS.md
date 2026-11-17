@@ -2,84 +2,70 @@
 
 ## Controls
 
-The release is built for a controller. Xbox, PlayStation, Switch Pro and generic SDL
-gamepads are detected automatically, including the DualSense Edge and Xbox Elite
-Series 1/2; the runner generates or updates the profile for the connected pad.
+The release is built for a controller. There is **one canonical profile**
+(`Config/GCPadNew.ini`) with SDL positional bindings. It is written on the first
+run and **never rewritten**. Two classes decide the face buttons:
 
-| GameCube | Action | Standard SDL gamepad |
-|---|---|---|
-| A | Jump / confirm | South face button (A / Cross / B on Switch) |
-| B | Cancel / attack | East face button (B / Circle / A on Switch) |
-| X | Action 1 | West face button |
-| Y | Action 2 | North face button |
-| Start | Pause | Start / Options / Plus |
-| Left stick | Move | Left stick |
-| D-pad | Move | D-pad |
-| C stick | Camera | Right stick |
-| L / R | Triggers | Left / right triggers |
+- **Positional** (default): A/B/X/Y follow the physical positions (Xbox,
+  PlayStation, generic and 8BitDo XInput pads).
+- **Nintendo**: A and B swap, X and Y swap, so the printed labels match
+  (Switch Pro, Joy-Con, 8BitDo in Switch/Nintendo mode). D-pad, sticks and
+  triggers are never swapped.
+
+The class is chosen per pad from the SDL gamepad type, with a small 8BitDo
+fallback. If the profile names a pad that is not connected, the first connected
+pad is bound instead, and a pad plugged in after launch is picked up without a
+restart. To force a class, set `controller_class = auto|positional|nintendo`
+under `[Input]` in `config.ini`. `--controller-layout` is accepted as an alias.
+
+| GameCube | Action | Positional | Nintendo |
+|---|---|---|---|
+| A | Jump / confirm | South (A / Cross) | East (printed A) |
+| B | Cancel / attack | East (B / Circle) | South (printed B) |
+| X | Action 1 | West (X / Square) | North (printed X) |
+| Y | Action 2 | North (Y / Triangle) | West (printed Y) |
+| Start | Pause | Start / Options / Plus | same |
+| Left stick | Move | Left stick | same |
+| D-pad | Move | D-pad | same |
+| C stick | Camera | Right stick | same |
+| L / R | Triggers | Left / right triggers | same |
 
 Rumble is enabled through the controller profile.
 
-To customize the mapping, edit
+To customize the mapping, edit `%LOCALAPPDATA%\RocketPowerRecomp\Config\GCPadNew.ini`.
+Deleting it makes the next launch write a fresh canonical profile; an existing
+profile is never regenerated or migrated.
+
+### DualSense Edge, Xbox Elite and 8BitDo
+
+These pads need no special profile: DualSense Edge behaves like a DualSense,
+Xbox Elite Series 1/2 behave like a standard Xbox pad, and 8BitDo pads use the
+positional class in XInput/standard mode and the Nintendo class in Switch mode.
+Paddles and the Edge Fn button are unbound; duplicate a face button in the pad's
+own app if you want a paddle shortcut.
+
+Send the startup line if a pad is mapped wrongly:
 
 ```
-%LOCALAPPDATA%\RocketPowerRecomp\Config\GCPadNew.ini
+controller: name="SDL/0/<name>" guid=<32 hex> type=<SDL gamepad type> class=<positional|nintendo> device="<bound device>" source=<auto|override|vendor-fallback|default> dpad=normal profile=<static|missing>
 ```
 
-Deleting that file makes the runner generate a fresh profile for the connected pad.
-If you customize the mapping, add `controller_profile=manual` under `[Input]` in
-`config.ini` so the automatic refresh does not overwrite your edits. There is no
-keyboard gameplay mapping in this build.
-
-### DualSense Edge and Xbox Elite
-
-Model detection uses the SDL GUID (bus, vendor and product IDs), not the product
-name. USB and Bluetooth variants of the same pad resolve to the same layout.
-
-| Pad | IDs | Layout | Paddles / Fn |
-|---|---|---|---|
-| DualSense Edge | `054c:0df2` | PlayStation, identical to DualSense | Unbound |
-| Xbox Elite Series 1 | `045e:02e3` | Xbox, identical to standard Xbox | Unbound |
-| Xbox Elite Series 2 | `045e:0b00`, `045e:0b05`, `045e:0b22` | Xbox, identical to standard Xbox | Unbound |
-
-The paddles and the Edge Fn button are deliberately not bound to GameCube inputs,
-so they cannot fire extra buttons by accident. If you want paddle shortcuts, map
-them to duplicate face buttons in the Xbox Accessories or PlayStation Accessories
-app; the game then sees the duplicated standard button. Standard pads leave the
-D-pad alone; a firmware that reports reversed D-pad left/right is corrected, and
-Switch pads swap only the printed A/B/X/Y labels.
-
-### 8BitDo pads
-
-8BitDo Pro 2, SN30, SF30 and Switch-mode pads report Nintendo-style SDL bindings
-(`a:b1,b:b0`, or `a:b3,b:b2` in Switch mode). The runner reads those live bindings
-and writes the Nintendo A/B/X/Y swap automatically. 8BitDo Ultimate and 64 pads
-report the standard `a:b0,b:b1` order and stay standard. If a firmware reports a
-reversed D-pad, the runner corrects left/right in the generated profile. Existing
-generated profiles migrate on the next launch; hand-edited profiles are preserved.
-To force the Nintendo A/B swap yourself, set `controller_profile=switch` (or
-`nintendo`) under `[Input]` in `config.ini`.
-
-Send this line from the startup log if a pad is mapped wrongly:
-
-```
-controller: "<name>" guid=<32 hex> bus=usb|bluetooth vid=<4 hex> pid=<4 hex> layout=<xbox|playstation|switch|generic> source=<guid|mapping|type|default> dpad_swap=<no|yes> face_swap=<no|yes> paddles=unbound extras=unbound family="<model>"
-```
-
-`paddles=unbound` and `extras=unbound` appear only on pads that have those
-buttons. Include the following `controller configuration: ... (... layout)` line too.
+`class=auto` in `config.ini` is shown as the resolved class. Include the following
+`controller: configured device missing; bound "..."` line if it appears.
 
 ## Save data
 
-The game uses a folder-based memory card:
+The game uses a raw 128 Mbit card in slot A and an empty slot B:
 
 ```
-%LOCALAPPDATA%\RocketPowerRecomp\GC\USA\Card A\
+%LOCALAPPDATA%\RocketPowerRecomp\GC\MemoryCardA.USA.raw
 ```
 
-RecompLauncher backs this folder up after every session. To bring saves from Dolphin,
-copy the `.gci` files from your Dolphin memory card into that folder. Card images
-(`.raw`, `.mcd`, `.mcs`) are not read directly.
+The card is created on first boot. A legacy folder card (`GC/USA/Card A/*.gci`)
+is imported once into the raw card when it is found. To bring a Dolphin save
+over, copy the `.gci` into `GC/USA/Card A` before the first run; raw `.raw`
+images are used directly at the path above. RecompLauncher backs up `GC` after
+every session.
 
 ## Settings
 

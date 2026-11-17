@@ -135,7 +135,19 @@ DolRecomp (patched SB-RFD build) generated:
    parse (`imported != legacy.gci_files.size()`); add a guard that keeps the
    folder device in that case. Documented in
    `docs/notes/memcard-hotfix-2026-11-16.md`.
-1. **Controller + memory-card hotfix (v0.2.1).** v0.2.0 players reported Xbox
+1. **Controller system v0.2.2 (canonical profile port).** One static
+   `GCPadNew.ini` (SDL positional), two classes (positional / nintendo, A<->B +
+   X<->Y only), class from the SDL type + a small 8BitDo fallback,
+   `controller_class` override, in-memory first-SDL-pad binding plus a 2 s
+   hot-plug watcher. No profile rewriting or migration. Offline suite 46/46;
+   live wired Xbox One: `type=xboxone class=positional`,
+   `profile=written` then `profile=static` with an unchanged SHA; forced
+   `controller_class=nintendo` logged `class=nintendo`; missing device bound
+   the first SDL pad; 59.94 FPS; fresh card 16,777,216 bytes. Release v0.2.2
+   staged (SHA-256 `EAEE73818FEEBFE07D81BC54929728053A310C9E6BC5000D62E8F27FA645D6FF`).
+   Physical button presses, Switch/8BitDo hardware and unplug/replug hot-plug
+   still need a player report.
+2. **Controller + memory-card hotfix (v0.2.1).** v0.2.0 players reported Xbox
    pads doing nothing and saves hanging at the card check. Controller root cause:
    the runner wrote `GCPadNew.ini` from an SDL session without Dolphin's hints, so
    `Device = SDL/0/<name>` could name a driver Dolphin never creates, and the RPBB

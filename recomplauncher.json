@@ -93,14 +93,17 @@
         "Video/widescreen_hack": "false",
         "Video/mute": "false",
         "Video/volume": "100",
-        "Video/efb_access": "true"
+        "Video/efb_access": "true",
+        "Input/controller_class": "auto"
       },
       "ensure": {
         "Video/aspect": "auto",
-        "Video/widescreen_hack": "false"
+        "Video/widescreen_hack": "false",
+        "Input/controller_class": "auto"
       },
       "always": {
-        "Video/efb_access": "true"
+        "Video/efb_access": "true",
+        "Input/controller_class": "auto"
       }
     }
   ],
@@ -172,6 +175,20 @@
         { "label": "Fullscreen", "args": ["--window-mode", "fullscreen"] },
         { "label": "Windowed", "args": ["--window-mode", "windowed"] }
       ]
+    },
+    {
+      "id": "controller_class",
+      "label": "Controller class",
+      "in": "frontend",
+      "help": "Auto lets each pad choose from its SDL type: Switch/Joy-Con/8BitDo Switch-mode pads swap A/B and X/Y, everything else stays positional. Force one class only if a pad is labelled wrongly.",
+      "choices": [
+        { "label": "Auto (per pad)", "set": { "Input/controller_class": "auto" } },
+        { "label": "Positional (Xbox/PlayStation)", "set": { "Input/controller_class": "positional" } },
+        { "label": "Nintendo (A/B swap)", "set": { "Input/controller_class": "nintendo" } }
+      ],
+      "defaults": {
+        "Input/controller_class": "auto"
+      }
     },
     {
       "id": "fps",

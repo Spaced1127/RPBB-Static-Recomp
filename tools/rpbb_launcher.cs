@@ -661,8 +661,45 @@ internal static class Program
             EnsureIniKey(frontend, "Video", "efb_access", "true");
         }
 
-        // The runner detects the connected controller and writes GCPadNew.ini
-        // itself, so a bundled DualSense profile must not mask another pad.
+        // The runner writes the one canonical GCPadNew.ini when it is missing and
+// never rewrites an existing profile; device binding falls back to the first
+// pad at runtime, so a bundled profile must not mask another pad.
+        // Writing it here (before the runner's SDL scan) keeps a pad-less first
+        // boot on the positional profile instead of a keyboard-only profile.
+        string padProfile = Path.Combine(configDir, "GCPadNew.ini");
+        if (!File.Exists(padProfile))
+            File.WriteAllText(padProfile, CanonicalPadProfile("SDL/0/Gamepad"));
+    }
+
+    private static string CanonicalPadProfile(string device)
+    {
+        return "[GCPad1]" + Environment.NewLine +
+            "Device = " + device + Environment.NewLine +
+            "Buttons/A = `Button A`" + Environment.NewLine +
+            "Buttons/B = `Button B`" + Environment.NewLine +
+            "Buttons/X = `Button X`" + Environment.NewLine +
+            "Buttons/Y = `Button Y`" + Environment.NewLine +
+            "Buttons/Z = `Shoulder R`" + Environment.NewLine +
+            "Buttons/Start = Start" + Environment.NewLine +
+            "Main Stick/Up = `Left Y+`" + Environment.NewLine +
+            "Main Stick/Down = `Left Y-`" + Environment.NewLine +
+            "Main Stick/Left = `Left X-`" + Environment.NewLine +
+            "Main Stick/Right = `Left X+`" + Environment.NewLine +
+            "Main Stick/Calibration = 100.00" + Environment.NewLine +
+            "C-Stick/Up = `Right Y+`" + Environment.NewLine +
+            "C-Stick/Down = `Right Y-`" + Environment.NewLine +
+            "C-Stick/Left = `Right X-`" + Environment.NewLine +
+            "C-Stick/Right = `Right X+`" + Environment.NewLine +
+            "C-Stick/Calibration = 100.00" + Environment.NewLine +
+            "Triggers/L = `Trigger L`" + Environment.NewLine +
+            "Triggers/R = `Trigger R`" + Environment.NewLine +
+            "Triggers/L-Analog = `Trigger L`" + Environment.NewLine +
+            "Triggers/R-Analog = `Trigger R`" + Environment.NewLine +
+            "D-Pad/Up = `Pad N`" + Environment.NewLine +
+            "D-Pad/Down = `Pad S`" + Environment.NewLine +
+            "D-Pad/Left = `Pad W`" + Environment.NewLine +
+            "D-Pad/Right = `Pad E`" + Environment.NewLine +
+            "Rumble/Motor = `Motor L` | `Motor R`" + Environment.NewLine;
     }
 
     private static void EnsureIniKey(string path, string section, string key, string value)
@@ -1730,8 +1767,8 @@ internal static class Program
             openConfig.Click += delegate { OpenSettings(); };
 
             MakeLabel(card,
-                      "Xbox, PlayStation, Switch Pro, DualSense Edge, Xbox Elite Series 1/2, 8BitDo and generic SDL controllers are detected automatically by GUID and live SDL mapping. To remap buttons, open the profile after the first run.",
-                      18, 212, 900, 40, TextDim, 8.5F, FontStyle.Regular);
+                      "One canonical profile is written on the first run and never rewritten. Switch / Joy-Con / 8BitDo Switch-mode pads use the Nintendo class (A and B, X and Y swapped); everything else is positional. If the profile's pad is missing, the first connected pad is bound, including pads plugged in later.",
+                      18, 212, 900, 60, TextDim, 8.5F, FontStyle.Regular);
 
             MakeLabel(card,
                       "The launcher never edits the game's files. Controller settings live in your user folder.",
@@ -2022,8 +2059,8 @@ internal static class Program
                 return;
             string profile = Path.Combine(_userDir, "Config", "GCPadNew.ini");
             _controllerStatus.Text = File.Exists(profile)
-                ? "Profile ready. The connected controller is mapped automatically."
-                : "A profile is generated for the connected controller on first play.";
+                ? "Canonical profile in place. Pads bind automatically, including hot-plug."
+                : "The canonical profile is written on first play.";
         }
 
         private void BrowseIso()
