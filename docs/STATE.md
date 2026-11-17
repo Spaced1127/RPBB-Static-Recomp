@@ -148,7 +148,10 @@ DolRecomp (patched SB-RFD build) generated:
    (`dist/RocketPower-Recomp-v0.2.1-Windows-x64.zip`, SHA-256
    `87940668E45472C6F174EA7B4003D6D60C7DAF9EA7DE48EC5B550B862D2D3CCE`): a real
    save wrote `GC/MemoryCardA.USA.raw` (16,777,216 bytes, SHA-256 `62B7A9EF...`)
-   and a restart loaded it; the artifact booted at 59.94 FPS.
+   and a restart loaded it; the artifact booted at 59.94 FPS. A visible-window
+   smoke on the published artifact re-confirmed 59.94 FPS / speed 1.00, detected
+   a live DualSense (`guid=030057564c050000e60c000000016800`, playstation layout)
+   and created a fresh valid 128 Mbit card (checksums OK).
    See `docs/notes/controller-regression-2026-11-16.md` and
    `docs/notes/memcard-hotfix-2026-11-16.md`.
 1. A/B the PGO build vs the non-PGO Clang build in the same gameplay scene; record FPS
