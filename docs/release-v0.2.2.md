@@ -41,7 +41,8 @@ pad is mapped wrongly.
 ## Please verify
 
 No physical Switch/8BitDo pad is attached to the build machine. The class
-matrix is verified offline against the SDL database; the live run used a wired
+matrix is verified offline against the SDL database, the reference was
+hand-tested with a physical Xbox pad, and this build's live run used a wired
 Xbox One pad. Please confirm:
 
 - Xbox 360/One/Series/Elite, DualSense/Edge, DS4/DS3 and generic pads act
@@ -51,6 +52,16 @@ Xbox One pad. Please confirm:
 - `controller_class=nintendo` forces the swap on a positional pad.
 
 ## What was verified here
+
+The reference implementation (WWE WMX8 v0.1.4) was validated by the user with a
+physical Xbox pad — bind and buttons work — so the first-pad fallback, class
+resolution and write-once profile path are hardware-proven, not just offline.
+RPBB v0.2.2 carries the same design plus the fixes listed in
+`docs/notes/controller-generic-design.md`.
+
+PlayStation pads remain **positional** by SDL type (PS3/PS4/PS5), so the
+DualSense/Edge, DS4 and DS3 behaviour that worked before is unchanged; the
+offline matrix covers all of them.
 
 - Offline suite: **46 checks, 0 failed** (class matrix, override precedence,
   8BitDo fallback, canonical profile, write-once, legacy keys).

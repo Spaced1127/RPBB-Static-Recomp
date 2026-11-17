@@ -143,7 +143,10 @@ DolRecomp (patched SB-RFD build) generated:
    live wired Xbox One: `type=xboxone class=positional`,
    `profile=written` then `profile=static` with an unchanged SHA; forced
    `controller_class=nintendo` logged `class=nintendo`; missing device bound
-   the first SDL pad; 59.94 FPS; fresh card 16,777,216 bytes. Release v0.2.2
+   the first SDL pad; 59.94 FPS; fresh card 16,777,216 bytes. The reference
+   (WMX8 v0.1.4) was user-validated with a physical Xbox pad (bind + buttons), so
+   the shared binding/class/profile path is hardware-proven; PlayStation types
+   stay positional. Release v0.2.2
    published (SHA-256 `EAEE73818FEEBFE07D81BC54929728053A310C9E6BC5000D62E8F27FA645D6FF`).
    Physical button presses, Switch/8BitDo hardware and unplug/replug hot-plug
    still need a player report.
